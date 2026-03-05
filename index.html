@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="1/3計算">
 <meta name="theme-color" content="#1a1a2e">
-<title>賞味期限チェック計算機[ver.0.5]</title>
+<title>賞味期限チェック計算機[ver.0.6]</title>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -318,6 +318,55 @@ input:focus { border-color: var(--accent); }
 /* 一括ヘッダー行ラベル */
 .bulk-header { display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin-bottom:4px; }
 .bulk-header span { font-size:10px; font-weight:700; color:var(--sub); letter-spacing:.04em; padding-left:2px; }
+
+/* ── カレンダーパネル ── */
+.cal-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.cal-nav-btn { width:36px; height:36px; border-radius:10px; border:1.5px solid var(--border); background:var(--surface2); font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.cal-nav-btn:active { background:var(--border); }
+.cal-month-label { font-size:16px; font-weight:900; letter-spacing:-.01em; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.cal-dow { text-align:center; font-size:10px; font-weight:700; color:var(--sub); padding:4px 0 6px; }
+.cal-dow:first-child { color:var(--red); }
+.cal-dow:last-child  { color:#2563EB; }
+.cal-day { min-height:46px; border-radius:10px; padding:4px 3px 3px; position:relative; cursor:default; }
+.cal-day.other-month { opacity:.3; }
+.cal-day.today { background:var(--accent-bg,#FCF0EB); border:1.5px solid var(--accent); }
+.cal-day-num { font-size:11px; font-weight:700; text-align:center; line-height:1; margin-bottom:2px; }
+.cal-day.today .cal-day-num { color:var(--accent); }
+.cal-day:nth-child(7n+1) .cal-day-num { color:var(--red); }
+.cal-day:nth-child(7n)   .cal-day-num { color:#2563EB; }
+.cal-dots { display:flex; flex-direction:column; gap:2px; }
+.cal-dot { font-size:9px; font-weight:700; border-radius:4px; padding:1px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; line-height:1.5; }
+.cal-dot.ok     { background:var(--green-dim); color:var(--green); }
+.cal-dot.soon   { background:var(--yellow-dim); color:var(--yellow); }
+.cal-dot.urgent { background:var(--red-dim); color:var(--red); }
+.cal-dot.passed { background:var(--purple-dim); color:var(--purple); }
+
+/* 登録一覧 */
+.reg-item { display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px solid var(--border); }
+.reg-item:last-child { border-bottom:none; }
+.reg-info { flex:1; }
+.reg-name { font-size:13px; font-weight:700; margin-bottom:3px; }
+.reg-dates { font-size:11px; color:var(--sub); line-height:1.7; font-family:'DM Mono',monospace; }
+.reg-del { width:30px; height:30px; border-radius:8px; border:1.5px solid var(--border); background:var(--surface2); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:var(--sub); }
+.reg-del:active { border-color:var(--red); color:var(--red); }
+
+/* 登録ボタン */
+.action-btn.register { border-color:var(--accent); color:var(--accent); background:var(--accent-bg,#FCF0EB); }
+.action-btn.registered { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+/* 名前入力モーダル */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:200; display:flex; align-items:flex-end; opacity:0; pointer-events:none; transition:opacity .2s; }
+.modal-overlay.open { opacity:1; pointer-events:all; }
+.modal-box { width:100%; background:var(--surface); border-radius:20px 20px 0 0; padding:24px 20px calc(env(safe-area-inset-bottom)+20px); transform:translateY(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); }
+.modal-overlay.open .modal-box { transform:translateY(0); }
+.modal-title { font-size:15px; font-weight:900; margin-bottom:16px; }
+.modal-input { width:100%; background:var(--surface2); border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; font-size:16px; font-family:inherit; color:var(--text); outline:none; margin-bottom:12px; }
+.modal-input:focus { border-color:var(--accent); }
+.modal-btns { display:flex; gap:10px; }
+.modal-btn { flex:1; padding:14px; border-radius:12px; border:none; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; }
+.modal-btn.cancel { background:var(--surface2); color:var(--sub); }
+.modal-btn.ok { background:var(--accent); color:#fff; }
 </style>
 </head>
 <body>
@@ -325,7 +374,7 @@ input:focus { border-color: var(--accent); }
 <div class="hdr">
   <div class="hdr-logo">
     <div class="logo-mark">⅓</div>
-    <div class="hdr-title">賞味期限チェック計算機[ver.0.5]</div>
+    <div class="hdr-title">賞味期限チェック計算機[ver.0.6]</div>
   </div>
   <div class="hdr-sub">1/3ルール ー 賞味期限から在庫落とし日を算出</div>
 </div>
@@ -336,6 +385,7 @@ input:focus { border-color: var(--accent); }
   <div class="tabs">
     <button class="tab-btn on" id="tab-single" onclick="switchTab('single')">1件計算</button>
     <button class="tab-btn" id="tab-bulk" onclick="switchTab('bulk')">一括計算</button>
+    <button class="tab-btn" id="tab-cal" onclick="switchTab('cal')">📅 カレンダー</button>
   </div>
 
   <!-- 単体パネル -->
@@ -392,6 +442,39 @@ input:focus { border-color: var(--accent); }
     </div>
     <div id="bulk-result-area"></div>
   </div><!-- /panel-bulk -->
+
+  <!-- カレンダーパネル -->
+  <div id="panel-cal" style="display:none">
+    <div class="card">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="calMove(-1)">&#8249;</button>
+        <div class="cal-month-label" id="cal-month-label"></div>
+        <button class="cal-nav-btn" onclick="calMove(1)">&#8250;</button>
+      </div>
+      <div class="cal-grid" id="cal-dow-row">
+        <div class="cal-dow">日</div><div class="cal-dow">月</div><div class="cal-dow">火</div>
+        <div class="cal-dow">水</div><div class="cal-dow">木</div><div class="cal-dow">金</div>
+        <div class="cal-dow">土</div>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <div class="card" id="reg-list-card">
+      <div class="card-title">📌 登録済み一覧</div>
+      <div id="reg-list"></div>
+    </div>
+  </div><!-- /panel-cal -->
+
+  <!-- 名前入力モーダル -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-title">📌 在庫落とし日を登録</div>
+      <input type="text" class="modal-input" id="modal-name" placeholder="商品名・メモ（任意）" maxlength="30">
+      <div class="modal-btns">
+        <button class="modal-btn cancel" onclick="closeModal()">キャンセル</button>
+        <button class="modal-btn ok" onclick="confirmRegister()">登録する</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 使い方 -->
   <div class="card">
@@ -639,7 +722,10 @@ function calculate() {
       <div class="action-btns">
         <button class="action-btn copy" onclick="copyResult('${fmt(rd)}','${fmt(expiry)}','${shelf}','${dtrNum}','${statusText}')">📋 コピー</button>
         <button class="action-btn share" onclick="shareResult('${fmt(rd)}','${fmt(expiry)}','${shelf}','${statusText}')">🔗 共有</button>
-        <button class="action-btn cal" onclick="addCalendar('${rd}','在庫落とし日')">📅 カレンダー</button>
+        <button class="action-btn cal" onclick="addCalendar('${rd}','在庫落とし日')">📅 ics</button>
+      </div>
+      <div class="action-btns" style="margin-top:6px">
+        <button class="action-btn register" id="btn-register" onclick="openModal('${rd}','${fmt(expiry)}','${shelf}')">📌 カレンダーに登録</button>
       </div>
     </div>`;
   document.getElementById('reset-btn').style.display = 'block';
@@ -650,8 +736,11 @@ function calculate() {
 function switchTab(tab) {
   document.getElementById('panel-single').style.display = tab==='single'?'contents':'none';
   document.getElementById('panel-bulk').style.display   = tab==='bulk'?'contents':'none';
+  document.getElementById('panel-cal').style.display    = tab==='cal'?'contents':'none';
   document.getElementById('tab-single').classList.toggle('on', tab==='single');
   document.getElementById('tab-bulk').classList.toggle('on', tab==='bulk');
+  document.getElementById('tab-cal').classList.toggle('on', tab==='cal');
+  if (tab==='cal') renderCalendar();
 }
 
 // ── 一括計算 ──
@@ -795,6 +884,169 @@ function addCalendar(dateStr, title) {
   const a    = document.createElement('a');
   a.href = url; a.download = '在庫落とし日.ics'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── 登録データ管理 ──
+const REG_KEY = 'cal_registrations_v1';
+
+function loadRegs() {
+  try { return JSON.parse(localStorage.getItem(REG_KEY)) || []; } catch(e) { return []; }
+}
+function saveRegs(list) {
+  try { localStorage.setItem(REG_KEY, JSON.stringify(list)); } catch(e) {}
+}
+
+// ── モーダル ──
+let _pendingReg = null;
+
+function openModal(rd, expiry, shelf) {
+  _pendingReg = { rd, expiry, shelf };
+  document.getElementById('modal-name').value = '';
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('modal-name').focus(), 300);
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  _pendingReg = null;
+}
+function confirmRegister() {
+  if (!_pendingReg) return;
+  const name = document.getElementById('modal-name').value.trim() || '未設定';
+  const regs = loadRegs();
+  regs.push({
+    id: Date.now(),
+    name,
+    rd: _pendingReg.rd,
+    expiry: _pendingReg.expiry,
+    shelf: _pendingReg.shelf,
+  });
+  saveRegs(regs);
+  closeModal();
+  // ボタンを登録済み表示
+  const btn = document.getElementById('btn-register');
+  if (btn) {
+    btn.classList.add('registered');
+    btn.textContent = '✅ 登録済み';
+    btn.disabled = true;
+  }
+}
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+document.getElementById('modal-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') confirmRegister();
+});
+
+// ── カレンダー描画 ──
+let calYear  = new Date().getFullYear();
+let calMonth = new Date().getMonth(); // 0-indexed
+
+function calMove(delta) {
+  calMonth += delta;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function getStatusCls(rd) {
+  const d = daysLeft(rd);
+  if (d < 0)       return 'passed';
+  if (d === 0)     return 'urgent';
+  if (d <= 7)      return 'urgent';
+  if (d <= 30)     return 'soon';
+  return 'ok';
+}
+
+function renderCalendar() {
+  const regs = loadRegs();
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // ラベル
+  document.getElementById('cal-month-label').textContent =
+    `${calYear}年 ${calMonth+1}月`;
+
+  // 月の初日・末日
+  const firstDay = new Date(calYear, calMonth, 1);
+  const lastDay  = new Date(calYear, calMonth+1, 0);
+  const startDow = firstDay.getDay(); // 0=Sun
+
+  // グリッドセル生成
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+
+  // 前月の空セル
+  for (let i = 0; i < startDow; i++) {
+    const prev = new Date(calYear, calMonth, -startDow+i+1);
+    const cell = document.createElement('div');
+    cell.className = 'cal-day other-month';
+    cell.innerHTML = `<div class="cal-day-num">${prev.getDate()}</div>`;
+    grid.appendChild(cell);
+  }
+
+  // 当月セル
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const date = new Date(calYear, calMonth, d);
+    const dateStr = date.toISOString().split('T')[0];
+    const isToday = date.getTime() === today.getTime();
+
+    const cell = document.createElement('div');
+    cell.className = 'cal-day' + (isToday ? ' today' : '');
+
+    // この日に登録があるか
+    const hits = regs.filter(r => r.rd === dateStr);
+    const dotsHtml = hits.map(r =>
+      `<div class="cal-dot ${getStatusCls(r.rd)}" title="${r.name}">${r.name}</div>`
+    ).join('');
+
+    cell.innerHTML = `<div class="cal-day-num">${d}</div><div class="cal-dots">${dotsHtml}</div>`;
+    grid.appendChild(cell);
+  }
+
+  // 後月の空セル（6行になるよう）
+  const totalCells = startDow + lastDay.getDate();
+  const remainder  = totalCells % 7;
+  if (remainder !== 0) {
+    for (let i = 1; i <= 7 - remainder; i++) {
+      const cell = document.createElement('div');
+      cell.className = 'cal-day other-month';
+      cell.innerHTML = `<div class="cal-day-num">${i}</div>`;
+      grid.appendChild(cell);
+    }
+  }
+
+  // 登録一覧
+  renderRegList(regs);
+}
+
+function renderRegList(regs) {
+  const el = document.getElementById('reg-list');
+  if (!regs.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px 0;font-size:13px;color:var(--sub)">登録済みのアイテムはありません</div>';
+    return;
+  }
+  // 在庫落とし日順にソート
+  const sorted = [...regs].sort((a,b) => new Date(a.rd) - new Date(b.rd));
+  el.innerHTML = sorted.map(r => {
+    const cls = getStatusCls(r.rd);
+    const d   = daysLeft(r.rd);
+    const statusLabel = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
+    return `<div class="reg-item">
+      <div class="reg-info">
+        <div class="reg-name">${r.name}</div>
+        <div class="reg-dates">
+          在庫落とし日：${fmt(r.rd)}　<span class="status-badge ${cls}">${statusLabel}</span><br>
+          賞味期限：${r.expiry}　基本：${r.shelf}日
+        </div>
+      </div>
+      <button class="reg-del" onclick="deleteReg(${r.id})" title="削除">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function deleteReg(id) {
+  const regs = loadRegs().filter(r => r.id !== id);
+  saveRegs(regs);
+  renderCalendar();
 }
 </script>
 </body>
