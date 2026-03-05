@@ -195,7 +195,7 @@ document.getElementById('qr-close').addEventListener('click', closeQRScanner);
 document.getElementById('btn-cfg-url').addEventListener('click', () => {
   const cfg = loadFbConfig();
   if (!cfg || !cfg.apiKey) {
-    showToast('⚠️ 先に接続してください');
+    showToast('⚠️ まず設定コードを貼り付けて「接続する」を押してください');
     return;
   }
   const enc    = btoa(JSON.stringify(cfg));
@@ -226,8 +226,7 @@ function copyUrlFallback(url) {
 const _origOpenFbSheet = openFbSheet;
 openFbSheet = function() {
   _origOpenFbSheet();
-  const urlBtn = document.getElementById('btn-cfg-url');
-  if (urlBtn) urlBtn.style.display = loadFbConfig() ? 'block' : 'none';
+  // URLボタンは常に表示
 };
 
 // ── トースト通知 ──
@@ -431,7 +430,7 @@ document.getElementById('qr-close').addEventListener('click', closeQRScanner);
 document.getElementById('btn-cfg-url').addEventListener('click', () => {
   const cfg = loadFbConfig();
   if (!cfg || !cfg.apiKey) {
-    showToast('⚠️ 先に接続してください');
+    showToast('⚠️ まず設定コードを貼り付けて「接続する」を押してください');
     return;
   }
   const enc    = btoa(JSON.stringify(cfg));
@@ -462,8 +461,7 @@ function copyUrlFallback(url) {
 const _origOpenFbSheet = openFbSheet;
 openFbSheet = function() {
   _origOpenFbSheet();
-  const urlBtn = document.getElementById('btn-cfg-url');
-  if (urlBtn) urlBtn.style.display = loadFbConfig() ? 'block' : 'none';
+  // URLボタンは常に表示
 };
 
 // ── トースト通知 ──
@@ -668,7 +666,7 @@ document.getElementById('qr-close').addEventListener('click', closeQRScanner);
 document.getElementById('btn-cfg-url').addEventListener('click', () => {
   const cfg = loadFbConfig();
   if (!cfg || !cfg.apiKey) {
-    showToast('⚠️ 先に接続してください');
+    showToast('⚠️ まず設定コードを貼り付けて「接続する」を押してください');
     return;
   }
   const enc    = btoa(JSON.stringify(cfg));
@@ -699,8 +697,7 @@ function copyUrlFallback(url) {
 const _origOpenFbSheet = openFbSheet;
 openFbSheet = function() {
   _origOpenFbSheet();
-  const urlBtn = document.getElementById('btn-cfg-url');
-  if (urlBtn) urlBtn.style.display = loadFbConfig() ? 'block' : 'none';
+  // URLボタンは常に表示
 };
 
 // ── トースト通知 ──
@@ -1170,7 +1167,7 @@ input:focus { border-color: var(--accent); }
       <div class="fb-error"   id="cfg-error"></div>
     </div>
     <div style="padding:8px 18px 0;flex-shrink:0">
-      <button class="fb-btn" id="btn-cfg-url" style="width:100%;background:var(--purple-dim,#F3EDFF);color:var(--purple,#6A3EA1);border:1.5px solid var(--purple,#6A3EA1);margin-bottom:8px;display:none">🔗 接続用URLを生成・共有</button>
+      <button class="fb-btn" id="btn-cfg-url" style="width:100%;background:var(--purple-dim,#F3EDFF);color:var(--purple,#6A3EA1);border:1.5px solid var(--purple,#6A3EA1);margin-bottom:8px">🔗 接続用URLを生成・共有</button>
     </div>
     <div class="fb-sftr">
       <button class="fb-btn secondary" id="btn-cfg-clear">切断</button>
@@ -2180,7 +2177,7 @@ document.getElementById('qr-close').addEventListener('click', closeQRScanner);
 document.getElementById('btn-cfg-url').addEventListener('click', () => {
   const cfg = loadFbConfig();
   if (!cfg || !cfg.apiKey) {
-    showToast('⚠️ 先に接続してください');
+    showToast('⚠️ まず設定コードを貼り付けて「接続する」を押してください');
     return;
   }
   const enc    = btoa(JSON.stringify(cfg));
@@ -2211,8 +2208,7 @@ function copyUrlFallback(url) {
 const _origOpenFbSheet = openFbSheet;
 openFbSheet = function() {
   _origOpenFbSheet();
-  const urlBtn = document.getElementById('btn-cfg-url');
-  if (urlBtn) urlBtn.style.display = loadFbConfig() ? 'block' : 'none';
+  // URLボタンは常に表示
 };
 
 // ── トースト通知 ──
