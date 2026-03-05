@@ -2179,14 +2179,24 @@ function renderRegList(regs) {
 // deleteReg は Firebase管理セクションで定義済み
 
 // ── 日付詳細モーダル ──
+// グローバルに現在の詳細情報を保持
+let _detailDateStr = '';
+let _detailItems   = [];
+
 function openDetail(dateStr, hits) {
+  _detailDateStr = dateStr;
+  const regs = loadRegs();
+  _detailItems = hits.map(h => regs.find(r => r.id === h.id) || h);
+
   document.getElementById('detail-title').textContent =
     dateStr.replace(/-/g, '/') + ' の在庫落とし日';
-  const regs = loadRegs();
-  // hitsのIDで最新データを取得
-  const items = hits.map(h => regs.find(r => r.id === h.id) || h);
-  const safeItems = items.map(x=>({id:x.id,rd:x.rd,company:x.company||x.name||'',partno:x.partno||'',person:x.person||'',expiry:x.expiry||'',shelf:x.shelf||''}));
-  document.getElementById('detail-list').innerHTML = items.map(r => {
+
+  renderDetailList();
+  document.getElementById('detail-overlay').classList.add('open');
+}
+
+function renderDetailList() {
+  document.getElementById('detail-list').innerHTML = _detailItems.map(r => {
     const cls = getStatusCls(r.rd);
     const d   = daysLeft(r.rd);
     const statusLabel = d < 0 ? `🚨 ${Math.abs(d)}日超過` : d === 0 ? '⚠️ 本日' : d <= 7 ? `⚠️ 残${d}日` : `残${d}日`;
@@ -2195,8 +2205,8 @@ function openDetail(dateStr, hits) {
       <div class="detail-item-hdr">
         <div>
           <div class="detail-company">${r.company||r.name||'未設定'}</div>
-      ${r.person?`<div style="font-size:11px;color:var(--sub);margin-top:2px">👤 ${r.person}</div>`:''}
-          ${r.partno ? `<div class="detail-partno">${r.partno}</div>` : ''}
+          ${r.person?`<div style="font-size:11px;color:var(--sub);margin-top:2px">👤 ${r.person}</div>`:''}
+          ${r.partno?`<div class="detail-partno">${r.partno}</div>`:''}
         </div>
         <div class="detail-status-big ${cls}">${statusLabel}</div>
       </div>
@@ -2218,19 +2228,31 @@ function openDetail(dateStr, hits) {
           <div class="detail-cell-value" style="font-size:12px">${r.expiry||'-'} − ${rmDays}日 = ${fmt(r.rd)}</div>
         </div>
       </div>
-      <button class="detail-del-btn" onclick="confirmDeleteFromDetail(${r.id},'${dateStr}',${JSON.stringify(safeItems)},'${(r.company||r.name||'未設定').replace(/'/g,'')}')" >🗑　削除</button>
+      <button class="detail-del-btn" data-id="${r.id}" data-name="${(r.company||r.name||'未設定').replace(/"/g,'&quot;')}">🗑　削除</button>
     </div>`;
   }).join('');
-  document.getElementById('detail-overlay').classList.add('open');
+
+  // 削除ボタンにイベントをバインド（onclick属性を使わない）
+  document.querySelectorAll('#detail-list .detail-del-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id   = Number(btn.dataset.id);
+      const name = btn.dataset.name || '未設定';
+      if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+      deleteReg(id);
+      _detailItems = _detailItems.filter(r => r.id !== id);
+      if (_detailItems.length === 0) { closeDetail(); return; }
+      renderDetailList();
+    });
+  });
 }
 
 function closeDetail() {
   document.getElementById('detail-overlay').classList.remove('open');
 }
 
+// deleteRegFromDetail は互換のため残す
 function deleteRegFromDetail(id, dateStr, items) {
   deleteReg(id);
-  // 残りのアイテムで詳細を再表示
   const remaining = items.filter(r => r.id !== id);
   if (remaining.length === 0) { closeDetail(); return; }
   openDetail(dateStr, remaining);
