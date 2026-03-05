@@ -1313,6 +1313,30 @@ input:focus { border-color: var(--accent); }
   padding: 2px 7px; border-radius: 5px; margin: 0 2px;
   vertical-align: middle;
 }
+
+/* 在庫落とし済 */
+.detail-done-btn {
+  flex: 1;
+  padding: 10px; border-radius: 10px;
+  border: 1.5px solid var(--green);
+  background: var(--green-dim);
+  color: var(--green); font-size: 13px; font-weight: 700;
+  font-family: inherit; cursor: pointer;
+  transition: all .12s;
+}
+.detail-done-btn:active { background: var(--green); color: #fff; }
+.detail-btn-row { display: flex; gap: 8px; margin-top: 10px; }
+.detail-del-btn { flex: 1; margin-top: 0; }
+
+/* 一覧の在庫落とし済アイテム */
+.reg-item.done { opacity: .5; }
+.reg-item.done .reg-name { text-decoration: line-through; color: var(--sub); }
+.done-badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  background: var(--green-dim); color: var(--green);
+  border-radius: 6px; padding: 1px 7px; margin-left: 6px;
+  vertical-align: middle;
+}
 </style>
 </head>
 <body>
@@ -2159,11 +2183,12 @@ function renderRegList(regs) {
     const cls = getStatusCls(r.rd);
     const d   = daysLeft(r.rd);
     const statusLabel = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
-    return `<div class="reg-item">
+    return `<div class="reg-item${r.done?' done':''}">
       <div class="reg-info">
         <div class="reg-name">
           ${r.company||r.name||'未設定'}
           ${r.partno?`<span style="font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;margin-left:5px">${r.partno}</span>`:''}
+          ${r.done?'<span class="done-badge">✅ 在庫落とし済</span>':''}
         </div>
         ${r.person?`<div style="font-size:11px;color:var(--sub);margin-bottom:2px">👤 ${r.person}</div>`:''}
         <div class="reg-dates">
@@ -2208,7 +2233,7 @@ function renderDetailList() {
           ${r.person?`<div style="font-size:11px;color:var(--sub);margin-top:2px">👤 ${r.person}</div>`:''}
           ${r.partno?`<div class="detail-partno">${r.partno}</div>`:''}
         </div>
-        <div class="detail-status-big ${cls}">${statusLabel}</div>
+        <div class="detail-status-big ${r.done ? 'ok' : cls}">${r.done ? '✅ 在庫落とし済' : statusLabel}</div>
       </div>
       <div class="detail-grid">
         <div class="detail-cell full">
@@ -2228,11 +2253,16 @@ function renderDetailList() {
           <div class="detail-cell-value" style="font-size:12px">${r.expiry||'-'} − ${rmDays}日 = ${fmt(r.rd)}</div>
         </div>
       </div>
-      <button class="detail-del-btn" data-id="${r.id}" data-name="${(r.company||r.name||'未設定').replace(/"/g,'&quot;')}">🗑　削除</button>
+      <div class="detail-btn-row">
+        <button class="detail-done-btn" data-id="${r.id}" data-name="${(r.company||r.name||'未設定').replace(/"/g,'&quot;')}" data-done="${r.done?'1':'0'}">
+          ${r.done ? '↩️　未処理に戻す' : '✅　在庫落とし済'}
+        </button>
+        <button class="detail-del-btn" data-id="${r.id}" data-name="${(r.company||r.name||'未設定').replace(/"/g,'&quot;')}">🗑　削除</button>
+      </div>
     </div>`;
   }).join('');
 
-  // 削除ボタンにイベントをバインド（onclick属性を使わない）
+  // 削除ボタン
   document.querySelectorAll('#detail-list .detail-del-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id   = Number(btn.dataset.id);
@@ -2241,6 +2271,24 @@ function renderDetailList() {
       deleteReg(id);
       _detailItems = _detailItems.filter(r => r.id !== id);
       if (_detailItems.length === 0) { closeDetail(); return; }
+      renderDetailList();
+    });
+  });
+
+  // 在庫落とし済ボタン
+  document.querySelectorAll('#detail-list .detail-done-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id      = Number(btn.dataset.id);
+      const isDone  = btn.dataset.done === '1';
+      const name    = btn.dataset.name || '未設定';
+      const msg     = isDone
+        ? `「${name}」を未処理に戻しますか？`
+        : `「${name}」を在庫落とし済にしますか？`;
+      if (!confirm(msg)) return;
+      // done フラグを切り替えて保存
+      const regs = loadRegs().map(r => r.id === id ? {...r, done: !isDone} : r);
+      saveRegs(regs);
+      _detailItems = _detailItems.map(r => r.id === id ? {...r, done: !isDone} : r);
       renderDetailList();
     });
   });
