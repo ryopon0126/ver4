@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="1/3計算">
 <meta name="theme-color" content="#1a1a2e">
-<title>賞味期限チェック計算機[ver.0.04]</title>
+<title>賞味期限チェック計算機[ver.0.5]</title>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -325,7 +325,7 @@ input:focus { border-color: var(--accent); }
 <div class="hdr">
   <div class="hdr-logo">
     <div class="logo-mark">⅓</div>
-    <div class="hdr-title">賞味期限チェック計算機[ver.0.04]</div>
+    <div class="hdr-title">賞味期限チェック計算機[ver.0.5]</div>
   </div>
   <div class="hdr-sub">1/3ルール ー 賞味期限から在庫落とし日を算出</div>
 </div>
@@ -734,8 +734,8 @@ document.getElementById('bulk-calc-btn').addEventListener('click', () => {
         </table>
       </div>
       <div class="action-btns" style="margin-top:12px">
-        <button class="action-btn copy" onclick="copyBulk(${JSON.stringify(copyText).replace(/'/g,"'")})" id="bulk-copy-btn">📋 コピー</button>
-        <button class="action-btn share" onclick="shareBulk(${JSON.stringify(copyText).replace(/'/g,"'")})">🔗 共有</button>
+        <button class="action-btn copy" onclick="copyBulk()" id="bulk-copy-btn">📋 コピー</button>
+        <button class="action-btn share" onclick="shareBulk()">🔗 共有</button>
       </div>
     </div>`;
 });
