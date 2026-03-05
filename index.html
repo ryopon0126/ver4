@@ -266,6 +266,17 @@ function toggleRegList() {
 function filterRegList() {
   renderRegList(loadRegs());
 }
+
+// ── 削除確認 ──
+function confirmDelete(id, name) {
+  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  deleteReg(id);
+}
+
+function confirmDeleteFromDetail(id, dateStr, items, name) {
+  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  deleteRegFromDetail(id, dateStr, items);
+}
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js">
 // ════════════════════════════
@@ -523,6 +534,17 @@ function toggleRegList() {
 // ── 登録一覧 検索 ──
 function filterRegList() {
   renderRegList(loadRegs());
+}
+
+// ── 削除確認 ──
+function confirmDelete(id, name) {
+  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  deleteReg(id);
+}
+
+function confirmDeleteFromDetail(id, dateStr, items, name) {
+  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  deleteRegFromDetail(id, dateStr, items);
 }
 </script>
 <!-- QRスキャン -->
@@ -782,6 +804,17 @@ function toggleRegList() {
 // ── 登録一覧 検索 ──
 function filterRegList() {
   renderRegList(loadRegs());
+}
+
+// ── 削除確認 ──
+function confirmDelete(id, name) {
+  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  deleteReg(id);
+}
+
+function confirmDeleteFromDetail(id, dateStr, items, name) {
+  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  deleteRegFromDetail(id, dateStr, items);
 }
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -2138,7 +2171,7 @@ function renderRegList(regs) {
           賞味期限：${r.expiry}　基本：${r.shelf}日
         </div>
       </div>
-      <button class="reg-del" onclick="deleteReg(${r.id})" title="削除">🗑</button>
+      <button class="reg-del" onclick="confirmDelete(${r.id},'${(r.company||r.name||'未設定').replace(/'/g,'')}')" title="削除">🗑</button>
     </div>`;
   }).join('');
 }
@@ -2185,7 +2218,7 @@ function openDetail(dateStr, hits) {
           <div class="detail-cell-value" style="font-size:12px">${r.expiry||'-'} − ${rmDays}日 = ${fmt(r.rd)}</div>
         </div>
       </div>
-      <button class="detail-del-btn" onclick="deleteRegFromDetail(${r.id},'${dateStr}',${JSON.stringify(safeItems)})">🗑　削除</button>
+      <button class="detail-del-btn" onclick="confirmDeleteFromDetail(${r.id},'${dateStr}',${JSON.stringify(safeItems)},'${(r.company||r.name||'未設定').replace(/'/g,'')}')" >🗑　削除</button>
     </div>`;
   }).join('');
   document.getElementById('detail-overlay').classList.add('open');
@@ -2458,6 +2491,17 @@ function toggleRegList() {
 // ── 登録一覧 検索 ──
 function filterRegList() {
   renderRegList(loadRegs());
+}
+
+// ── 削除確認 ──
+function confirmDelete(id, name) {
+  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  deleteReg(id);
+}
+
+function confirmDeleteFromDetail(id, dateStr, items, name) {
+  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  deleteRegFromDetail(id, dateStr, items);
 }
 </script>
 </body>
