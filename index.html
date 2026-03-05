@@ -7,7 +7,717 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="1/3計算">
 <meta name="theme-color" content="#1a1a2e">
-<title>賞味期限チェック計算機[ver.0.6]</title>
+<title>賞味期限チェック計算機[ver.0.9]</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js">
+// ════════════════════════════
+//  Firebase 設定UI
+// ════════════════════════════
+function openFbSheet() {
+  const cfg = loadFbConfig() || {};
+  if (cfg.apiKey) {
+    document.getElementById('cfg-paste').value =
+      'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+    showCfgPreview(cfg);
+  } else {
+    document.getElementById('cfg-paste').value = '';
+    hideCfgFeedback();
+  }
+  const area = document.getElementById('fb-status-area');
+  if (!cfg.apiKey) {
+    area.innerHTML = '<div class="fb-status-card ng">❌ 未設定 — 設定コードを貼り付けてください</div>';
+  } else if (_fbConnected) {
+    area.innerHTML = '<div class="fb-status-card ok">✅ Firebase に接続済みです</div>';
+  } else {
+    area.innerHTML = '<div class="fb-status-card pending">⏳ 接続確認中...</div>';
+  }
+  document.getElementById('fb-sheet-overlay').classList.add('open');
+}
+function closeFbSheet() {
+  document.getElementById('fb-sheet-overlay').classList.remove('open');
+}
+document.getElementById('btn-settings').addEventListener('click', openFbSheet);
+document.getElementById('fb-sheet-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('fb-sheet-overlay')) closeFbSheet();
+});
+
+function parseFirebaseConfig(text) {
+  let s = text.trim()
+    .replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '')
+    .replace(/;\s*$/, '').trim();
+  s = s.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3');
+  const cfg = JSON.parse(s);
+  if (!cfg.apiKey)      throw new Error('"apiKey" が見つかりません');
+  if (!cfg.databaseURL) throw new Error('"databaseURL" が見つかりません');
+  return cfg;
+}
+
+function showCfgPreview(cfg) {
+  const el = document.getElementById('cfg-preview');
+  el.innerHTML = Object.entries(cfg).map(([k,v]) =>
+    `<div><span style="opacity:.6">${k}:</span> ${String(v).slice(0,50)}</div>`
+  ).join('');
+  el.style.display = 'block';
+  document.getElementById('cfg-error').style.display = 'none';
+}
+function showCfgError(msg) {
+  document.getElementById('cfg-preview').style.display = 'none';
+  const el = document.getElementById('cfg-error');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+function hideCfgFeedback() {
+  document.getElementById('cfg-preview').style.display = 'none';
+  document.getElementById('cfg-error').style.display   = 'none';
+}
+
+document.getElementById('cfg-paste').addEventListener('input', function() {
+  const t = this.value.trim();
+  if (!t) { hideCfgFeedback(); return; }
+  try {
+    const cfg = parseFirebaseConfig(t);
+    showCfgPreview(cfg);
+  } catch(e) {
+    if (t.includes('}')) showCfgError(e.message);
+    else hideCfgFeedback();
+  }
+});
+
+document.getElementById('btn-cfg-save').addEventListener('click', () => {
+  const text = document.getElementById('cfg-paste').value.trim();
+  if (!text) { showCfgError('設定コードを貼り付けてください'); return; }
+  let cfg;
+  try { cfg = parseFirebaseConfig(text); } catch(e) { showCfgError(e.message); return; }
+  saveFbConfig(cfg);
+  const ok = initFirebase(cfg);
+  if (ok) { closeFbSheet(); }
+  else    { showCfgError('接続に失敗しました。設定コードを確認してください。'); }
+});
+
+document.getElementById('btn-cfg-clear').addEventListener('click', () => {
+  if (!confirm('Firebase接続を切断しますか？\nローカル保存モードに切り替わります。')) return;
+  clearFbConfig();
+  if (firebase.apps.length) firebase.apps.forEach(a => a.delete().catch(()=>{}));
+  _db = null; _fbConnected = false;
+  document.getElementById('fb-dot').style.background = 'rgba(255,255,255,.3)';
+  _regs = localLoadRegs();
+  closeFbSheet();
+  renderCalendar();
+});
+
+// QRスキャナー
+let _qrStream = null, _qrAnim = null;
+function openQRScanner() {
+  document.getElementById('qr-overlay').classList.add('open');
+  document.getElementById('qr-success-banner').style.display = 'none';
+  navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } })
+    .then(stream => {
+      _qrStream = stream;
+      const v = document.getElementById('qr-video');
+      v.srcObject = stream; v.play();
+      requestAnimationFrame(scanQRFrame);
+    })
+    .catch(() => {
+      closeQRScanner();
+      alert('カメラへのアクセスが許可されていません。\nSafari設定 → カメラ → 許可 をご確認ください。');
+    });
+}
+function closeQRScanner() {
+  document.getElementById('qr-overlay').classList.remove('open');
+  if (_qrStream) { _qrStream.getTracks().forEach(t=>t.stop()); _qrStream=null; }
+  if (_qrAnim)   { cancelAnimationFrame(_qrAnim); _qrAnim=null; }
+}
+function scanQRFrame() {
+  const v = document.getElementById('qr-video');
+  if (v.readyState !== v.HAVE_ENOUGH_DATA) { _qrAnim=requestAnimationFrame(scanQRFrame); return; }
+  const c = document.createElement('canvas');
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  const img  = c.getContext('2d').getImageData(0,0,c.width,c.height);
+  const code = jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+  if (code && code.data.startsWith('fbcfg:')) {
+    try {
+      const cfg = JSON.parse(code.data.slice(6));
+      document.getElementById('qr-success-banner').style.display='flex';
+      if (_qrStream) { _qrStream.getTracks().forEach(t=>t.stop()); _qrStream=null; }
+      setTimeout(() => {
+        closeQRScanner();
+        document.getElementById('cfg-paste').value =
+          'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+        showCfgPreview(cfg);
+        saveFbConfig(cfg);
+        initFirebase(cfg);
+        closeFbSheet();
+      }, 1200);
+      return;
+    } catch(e) {}
+  }
+  _qrAnim = requestAnimationFrame(scanQRFrame);
+}
+document.getElementById('btn-qr-scan').addEventListener('click', openQRScanner);
+document.getElementById('qr-close').addEventListener('click', closeQRScanner);
+
+// ── 初期化：Firebase設定があれば自動接続 ──
+(function init() {
+  _regs = localLoadRegs();
+  const cfg = loadFbConfig();
+  if (cfg && cfg.apiKey && cfg.databaseURL) {
+    initFirebase(cfg); // onValueでデータ取得→_regs更新→renderCalendar
+  }
+})();
+
+// ════════════════════════════
+//  URL共有機能
+// ════════════════════════════
+
+// 起動時：URLにfbcfgパラメータがあれば自動接続
+(function checkUrlCfg() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const enc = params.get('fbcfg');
+    if (!enc) return;
+    const cfg = JSON.parse(atob(enc));
+    if (!cfg.apiKey || !cfg.databaseURL) return;
+    // すでに同じ設定が保存されていればスキップ
+    const existing = loadFbConfig();
+    if (existing && existing.apiKey === cfg.apiKey) return;
+    saveFbConfig(cfg);
+    initFirebase(cfg);
+    // URLからパラメータを除去（履歴を汚さない）
+    const clean = window.location.pathname;
+    history.replaceState(null, '', clean);
+    // 成功トースト表示
+    showToast('✅ FirebaseにURLから自動接続しました');
+  } catch(e) { /* 無効なパラメータは無視 */ }
+})();
+
+// URLを生成してコピー or 共有
+document.getElementById('btn-cfg-url').addEventListener('click', () => {
+  const cfg = loadFbConfig();
+  if (!cfg || !cfg.apiKey) {
+    showToast('⚠️ 先に接続してください');
+    return;
+  }
+  const enc    = btoa(JSON.stringify(cfg));
+  const origin = window.location.origin + window.location.pathname;
+  const url    = origin + '?fbcfg=' + enc;
+
+  if (navigator.share) {
+    navigator.share({
+      title: '賞味期限チェック計算機 - Firebase接続URL',
+      text:  'このURLを開くだけでFirebaseに自動接続されます。',
+      url
+    }).catch(() => copyUrlFallback(url));
+  } else {
+    copyUrlFallback(url);
+  }
+});
+
+function copyUrlFallback(url) {
+  navigator.clipboard.writeText(url)
+    .then(() => showToast('✅ URLをコピーしました！LINEやメールで共有してください'))
+    .catch(() => {
+      // クリップボードも使えない場合はアラートで表示
+      prompt('以下のURLをコピーしてください：', url);
+    });
+}
+
+// 「URLを共有」ボタンの表示制御：接続済みのときだけ表示
+const _origOpenFbSheet = openFbSheet;
+openFbSheet = function() {
+  _origOpenFbSheet();
+  const urlBtn = document.getElementById('btn-cfg-url');
+  if (urlBtn) urlBtn.style.display = loadFbConfig() ? 'block' : 'none';
+};
+
+// ── トースト通知 ──
+function showToast(msg) {
+  let t = document.getElementById('toast-el');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast-el';
+    t.style.cssText = 'position:fixed;bottom:calc(env(safe-area-inset-bottom)+24px);left:50%;transform:translateX(-50%);background:#1E1C18;color:#fff;padding:11px 20px;border-radius:99px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:opacity .2s;white-space:nowrap;max-width:90vw;text-align:center;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js">
+// ════════════════════════════
+//  Firebase 設定UI
+// ════════════════════════════
+function openFbSheet() {
+  const cfg = loadFbConfig() || {};
+  if (cfg.apiKey) {
+    document.getElementById('cfg-paste').value =
+      'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+    showCfgPreview(cfg);
+  } else {
+    document.getElementById('cfg-paste').value = '';
+    hideCfgFeedback();
+  }
+  const area = document.getElementById('fb-status-area');
+  if (!cfg.apiKey) {
+    area.innerHTML = '<div class="fb-status-card ng">❌ 未設定 — 設定コードを貼り付けてください</div>';
+  } else if (_fbConnected) {
+    area.innerHTML = '<div class="fb-status-card ok">✅ Firebase に接続済みです</div>';
+  } else {
+    area.innerHTML = '<div class="fb-status-card pending">⏳ 接続確認中...</div>';
+  }
+  document.getElementById('fb-sheet-overlay').classList.add('open');
+}
+function closeFbSheet() {
+  document.getElementById('fb-sheet-overlay').classList.remove('open');
+}
+document.getElementById('btn-settings').addEventListener('click', openFbSheet);
+document.getElementById('fb-sheet-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('fb-sheet-overlay')) closeFbSheet();
+});
+
+function parseFirebaseConfig(text) {
+  let s = text.trim()
+    .replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '')
+    .replace(/;\s*$/, '').trim();
+  s = s.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3');
+  const cfg = JSON.parse(s);
+  if (!cfg.apiKey)      throw new Error('"apiKey" が見つかりません');
+  if (!cfg.databaseURL) throw new Error('"databaseURL" が見つかりません');
+  return cfg;
+}
+
+function showCfgPreview(cfg) {
+  const el = document.getElementById('cfg-preview');
+  el.innerHTML = Object.entries(cfg).map(([k,v]) =>
+    `<div><span style="opacity:.6">${k}:</span> ${String(v).slice(0,50)}</div>`
+  ).join('');
+  el.style.display = 'block';
+  document.getElementById('cfg-error').style.display = 'none';
+}
+function showCfgError(msg) {
+  document.getElementById('cfg-preview').style.display = 'none';
+  const el = document.getElementById('cfg-error');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+function hideCfgFeedback() {
+  document.getElementById('cfg-preview').style.display = 'none';
+  document.getElementById('cfg-error').style.display   = 'none';
+}
+
+document.getElementById('cfg-paste').addEventListener('input', function() {
+  const t = this.value.trim();
+  if (!t) { hideCfgFeedback(); return; }
+  try {
+    const cfg = parseFirebaseConfig(t);
+    showCfgPreview(cfg);
+  } catch(e) {
+    if (t.includes('}')) showCfgError(e.message);
+    else hideCfgFeedback();
+  }
+});
+
+document.getElementById('btn-cfg-save').addEventListener('click', () => {
+  const text = document.getElementById('cfg-paste').value.trim();
+  if (!text) { showCfgError('設定コードを貼り付けてください'); return; }
+  let cfg;
+  try { cfg = parseFirebaseConfig(text); } catch(e) { showCfgError(e.message); return; }
+  saveFbConfig(cfg);
+  const ok = initFirebase(cfg);
+  if (ok) { closeFbSheet(); }
+  else    { showCfgError('接続に失敗しました。設定コードを確認してください。'); }
+});
+
+document.getElementById('btn-cfg-clear').addEventListener('click', () => {
+  if (!confirm('Firebase接続を切断しますか？\nローカル保存モードに切り替わります。')) return;
+  clearFbConfig();
+  if (firebase.apps.length) firebase.apps.forEach(a => a.delete().catch(()=>{}));
+  _db = null; _fbConnected = false;
+  document.getElementById('fb-dot').style.background = 'rgba(255,255,255,.3)';
+  _regs = localLoadRegs();
+  closeFbSheet();
+  renderCalendar();
+});
+
+// QRスキャナー
+let _qrStream = null, _qrAnim = null;
+function openQRScanner() {
+  document.getElementById('qr-overlay').classList.add('open');
+  document.getElementById('qr-success-banner').style.display = 'none';
+  navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } })
+    .then(stream => {
+      _qrStream = stream;
+      const v = document.getElementById('qr-video');
+      v.srcObject = stream; v.play();
+      requestAnimationFrame(scanQRFrame);
+    })
+    .catch(() => {
+      closeQRScanner();
+      alert('カメラへのアクセスが許可されていません。\nSafari設定 → カメラ → 許可 をご確認ください。');
+    });
+}
+function closeQRScanner() {
+  document.getElementById('qr-overlay').classList.remove('open');
+  if (_qrStream) { _qrStream.getTracks().forEach(t=>t.stop()); _qrStream=null; }
+  if (_qrAnim)   { cancelAnimationFrame(_qrAnim); _qrAnim=null; }
+}
+function scanQRFrame() {
+  const v = document.getElementById('qr-video');
+  if (v.readyState !== v.HAVE_ENOUGH_DATA) { _qrAnim=requestAnimationFrame(scanQRFrame); return; }
+  const c = document.createElement('canvas');
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  const img  = c.getContext('2d').getImageData(0,0,c.width,c.height);
+  const code = jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+  if (code && code.data.startsWith('fbcfg:')) {
+    try {
+      const cfg = JSON.parse(code.data.slice(6));
+      document.getElementById('qr-success-banner').style.display='flex';
+      if (_qrStream) { _qrStream.getTracks().forEach(t=>t.stop()); _qrStream=null; }
+      setTimeout(() => {
+        closeQRScanner();
+        document.getElementById('cfg-paste').value =
+          'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+        showCfgPreview(cfg);
+        saveFbConfig(cfg);
+        initFirebase(cfg);
+        closeFbSheet();
+      }, 1200);
+      return;
+    } catch(e) {}
+  }
+  _qrAnim = requestAnimationFrame(scanQRFrame);
+}
+document.getElementById('btn-qr-scan').addEventListener('click', openQRScanner);
+document.getElementById('qr-close').addEventListener('click', closeQRScanner);
+
+// ── 初期化：Firebase設定があれば自動接続 ──
+(function init() {
+  _regs = localLoadRegs();
+  const cfg = loadFbConfig();
+  if (cfg && cfg.apiKey && cfg.databaseURL) {
+    initFirebase(cfg); // onValueでデータ取得→_regs更新→renderCalendar
+  }
+})();
+
+// ════════════════════════════
+//  URL共有機能
+// ════════════════════════════
+
+// 起動時：URLにfbcfgパラメータがあれば自動接続
+(function checkUrlCfg() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const enc = params.get('fbcfg');
+    if (!enc) return;
+    const cfg = JSON.parse(atob(enc));
+    if (!cfg.apiKey || !cfg.databaseURL) return;
+    // すでに同じ設定が保存されていればスキップ
+    const existing = loadFbConfig();
+    if (existing && existing.apiKey === cfg.apiKey) return;
+    saveFbConfig(cfg);
+    initFirebase(cfg);
+    // URLからパラメータを除去（履歴を汚さない）
+    const clean = window.location.pathname;
+    history.replaceState(null, '', clean);
+    // 成功トースト表示
+    showToast('✅ FirebaseにURLから自動接続しました');
+  } catch(e) { /* 無効なパラメータは無視 */ }
+})();
+
+// URLを生成してコピー or 共有
+document.getElementById('btn-cfg-url').addEventListener('click', () => {
+  const cfg = loadFbConfig();
+  if (!cfg || !cfg.apiKey) {
+    showToast('⚠️ 先に接続してください');
+    return;
+  }
+  const enc    = btoa(JSON.stringify(cfg));
+  const origin = window.location.origin + window.location.pathname;
+  const url    = origin + '?fbcfg=' + enc;
+
+  if (navigator.share) {
+    navigator.share({
+      title: '賞味期限チェック計算機 - Firebase接続URL',
+      text:  'このURLを開くだけでFirebaseに自動接続されます。',
+      url
+    }).catch(() => copyUrlFallback(url));
+  } else {
+    copyUrlFallback(url);
+  }
+});
+
+function copyUrlFallback(url) {
+  navigator.clipboard.writeText(url)
+    .then(() => showToast('✅ URLをコピーしました！LINEやメールで共有してください'))
+    .catch(() => {
+      // クリップボードも使えない場合はアラートで表示
+      prompt('以下のURLをコピーしてください：', url);
+    });
+}
+
+// 「URLを共有」ボタンの表示制御：接続済みのときだけ表示
+const _origOpenFbSheet = openFbSheet;
+openFbSheet = function() {
+  _origOpenFbSheet();
+  const urlBtn = document.getElementById('btn-cfg-url');
+  if (urlBtn) urlBtn.style.display = loadFbConfig() ? 'block' : 'none';
+};
+
+// ── トースト通知 ──
+function showToast(msg) {
+  let t = document.getElementById('toast-el');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast-el';
+    t.style.cssText = 'position:fixed;bottom:calc(env(safe-area-inset-bottom)+24px);left:50%;transform:translateX(-50%);background:#1E1C18;color:#fff;padding:11px 20px;border-radius:99px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:opacity .2s;white-space:nowrap;max-width:90vw;text-align:center;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
+</script>
+<!-- QRスキャン -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js">
+// ════════════════════════════
+//  Firebase 設定UI
+// ════════════════════════════
+function openFbSheet() {
+  const cfg = loadFbConfig() || {};
+  if (cfg.apiKey) {
+    document.getElementById('cfg-paste').value =
+      'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+    showCfgPreview(cfg);
+  } else {
+    document.getElementById('cfg-paste').value = '';
+    hideCfgFeedback();
+  }
+  const area = document.getElementById('fb-status-area');
+  if (!cfg.apiKey) {
+    area.innerHTML = '<div class="fb-status-card ng">❌ 未設定 — 設定コードを貼り付けてください</div>';
+  } else if (_fbConnected) {
+    area.innerHTML = '<div class="fb-status-card ok">✅ Firebase に接続済みです</div>';
+  } else {
+    area.innerHTML = '<div class="fb-status-card pending">⏳ 接続確認中...</div>';
+  }
+  document.getElementById('fb-sheet-overlay').classList.add('open');
+}
+function closeFbSheet() {
+  document.getElementById('fb-sheet-overlay').classList.remove('open');
+}
+document.getElementById('btn-settings').addEventListener('click', openFbSheet);
+document.getElementById('fb-sheet-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('fb-sheet-overlay')) closeFbSheet();
+});
+
+function parseFirebaseConfig(text) {
+  let s = text.trim()
+    .replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '')
+    .replace(/;\s*$/, '').trim();
+  s = s.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3');
+  const cfg = JSON.parse(s);
+  if (!cfg.apiKey)      throw new Error('"apiKey" が見つかりません');
+  if (!cfg.databaseURL) throw new Error('"databaseURL" が見つかりません');
+  return cfg;
+}
+
+function showCfgPreview(cfg) {
+  const el = document.getElementById('cfg-preview');
+  el.innerHTML = Object.entries(cfg).map(([k,v]) =>
+    `<div><span style="opacity:.6">${k}:</span> ${String(v).slice(0,50)}</div>`
+  ).join('');
+  el.style.display = 'block';
+  document.getElementById('cfg-error').style.display = 'none';
+}
+function showCfgError(msg) {
+  document.getElementById('cfg-preview').style.display = 'none';
+  const el = document.getElementById('cfg-error');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+function hideCfgFeedback() {
+  document.getElementById('cfg-preview').style.display = 'none';
+  document.getElementById('cfg-error').style.display   = 'none';
+}
+
+document.getElementById('cfg-paste').addEventListener('input', function() {
+  const t = this.value.trim();
+  if (!t) { hideCfgFeedback(); return; }
+  try {
+    const cfg = parseFirebaseConfig(t);
+    showCfgPreview(cfg);
+  } catch(e) {
+    if (t.includes('}')) showCfgError(e.message);
+    else hideCfgFeedback();
+  }
+});
+
+document.getElementById('btn-cfg-save').addEventListener('click', () => {
+  const text = document.getElementById('cfg-paste').value.trim();
+  if (!text) { showCfgError('設定コードを貼り付けてください'); return; }
+  let cfg;
+  try { cfg = parseFirebaseConfig(text); } catch(e) { showCfgError(e.message); return; }
+  saveFbConfig(cfg);
+  const ok = initFirebase(cfg);
+  if (ok) { closeFbSheet(); }
+  else    { showCfgError('接続に失敗しました。設定コードを確認してください。'); }
+});
+
+document.getElementById('btn-cfg-clear').addEventListener('click', () => {
+  if (!confirm('Firebase接続を切断しますか？\nローカル保存モードに切り替わります。')) return;
+  clearFbConfig();
+  if (firebase.apps.length) firebase.apps.forEach(a => a.delete().catch(()=>{}));
+  _db = null; _fbConnected = false;
+  document.getElementById('fb-dot').style.background = 'rgba(255,255,255,.3)';
+  _regs = localLoadRegs();
+  closeFbSheet();
+  renderCalendar();
+});
+
+// QRスキャナー
+let _qrStream = null, _qrAnim = null;
+function openQRScanner() {
+  document.getElementById('qr-overlay').classList.add('open');
+  document.getElementById('qr-success-banner').style.display = 'none';
+  navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } })
+    .then(stream => {
+      _qrStream = stream;
+      const v = document.getElementById('qr-video');
+      v.srcObject = stream; v.play();
+      requestAnimationFrame(scanQRFrame);
+    })
+    .catch(() => {
+      closeQRScanner();
+      alert('カメラへのアクセスが許可されていません。\nSafari設定 → カメラ → 許可 をご確認ください。');
+    });
+}
+function closeQRScanner() {
+  document.getElementById('qr-overlay').classList.remove('open');
+  if (_qrStream) { _qrStream.getTracks().forEach(t=>t.stop()); _qrStream=null; }
+  if (_qrAnim)   { cancelAnimationFrame(_qrAnim); _qrAnim=null; }
+}
+function scanQRFrame() {
+  const v = document.getElementById('qr-video');
+  if (v.readyState !== v.HAVE_ENOUGH_DATA) { _qrAnim=requestAnimationFrame(scanQRFrame); return; }
+  const c = document.createElement('canvas');
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  const img  = c.getContext('2d').getImageData(0,0,c.width,c.height);
+  const code = jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+  if (code && code.data.startsWith('fbcfg:')) {
+    try {
+      const cfg = JSON.parse(code.data.slice(6));
+      document.getElementById('qr-success-banner').style.display='flex';
+      if (_qrStream) { _qrStream.getTracks().forEach(t=>t.stop()); _qrStream=null; }
+      setTimeout(() => {
+        closeQRScanner();
+        document.getElementById('cfg-paste').value =
+          'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+        showCfgPreview(cfg);
+        saveFbConfig(cfg);
+        initFirebase(cfg);
+        closeFbSheet();
+      }, 1200);
+      return;
+    } catch(e) {}
+  }
+  _qrAnim = requestAnimationFrame(scanQRFrame);
+}
+document.getElementById('btn-qr-scan').addEventListener('click', openQRScanner);
+document.getElementById('qr-close').addEventListener('click', closeQRScanner);
+
+// ── 初期化：Firebase設定があれば自動接続 ──
+(function init() {
+  _regs = localLoadRegs();
+  const cfg = loadFbConfig();
+  if (cfg && cfg.apiKey && cfg.databaseURL) {
+    initFirebase(cfg); // onValueでデータ取得→_regs更新→renderCalendar
+  }
+})();
+
+// ════════════════════════════
+//  URL共有機能
+// ════════════════════════════
+
+// 起動時：URLにfbcfgパラメータがあれば自動接続
+(function checkUrlCfg() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const enc = params.get('fbcfg');
+    if (!enc) return;
+    const cfg = JSON.parse(atob(enc));
+    if (!cfg.apiKey || !cfg.databaseURL) return;
+    // すでに同じ設定が保存されていればスキップ
+    const existing = loadFbConfig();
+    if (existing && existing.apiKey === cfg.apiKey) return;
+    saveFbConfig(cfg);
+    initFirebase(cfg);
+    // URLからパラメータを除去（履歴を汚さない）
+    const clean = window.location.pathname;
+    history.replaceState(null, '', clean);
+    // 成功トースト表示
+    showToast('✅ FirebaseにURLから自動接続しました');
+  } catch(e) { /* 無効なパラメータは無視 */ }
+})();
+
+// URLを生成してコピー or 共有
+document.getElementById('btn-cfg-url').addEventListener('click', () => {
+  const cfg = loadFbConfig();
+  if (!cfg || !cfg.apiKey) {
+    showToast('⚠️ 先に接続してください');
+    return;
+  }
+  const enc    = btoa(JSON.stringify(cfg));
+  const origin = window.location.origin + window.location.pathname;
+  const url    = origin + '?fbcfg=' + enc;
+
+  if (navigator.share) {
+    navigator.share({
+      title: '賞味期限チェック計算機 - Firebase接続URL',
+      text:  'このURLを開くだけでFirebaseに自動接続されます。',
+      url
+    }).catch(() => copyUrlFallback(url));
+  } else {
+    copyUrlFallback(url);
+  }
+});
+
+function copyUrlFallback(url) {
+  navigator.clipboard.writeText(url)
+    .then(() => showToast('✅ URLをコピーしました！LINEやメールで共有してください'))
+    .catch(() => {
+      // クリップボードも使えない場合はアラートで表示
+      prompt('以下のURLをコピーしてください：', url);
+    });
+}
+
+// 「URLを共有」ボタンの表示制御：接続済みのときだけ表示
+const _origOpenFbSheet = openFbSheet;
+openFbSheet = function() {
+  _origOpenFbSheet();
+  const urlBtn = document.getElementById('btn-cfg-url');
+  if (urlBtn) urlBtn.style.display = loadFbConfig() ? 'block' : 'none';
+};
+
+// ── トースト通知 ──
+function showToast(msg) {
+  let t = document.getElementById('toast-el');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast-el';
+    t.style.cssText = 'position:fixed;bottom:calc(env(safe-area-inset-bottom)+24px);left:50%;transform:translateX(-50%);background:#1E1C18;color:#fff;padding:11px 20px;border-radius:99px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:opacity .2s;white-space:nowrap;max-width:90vw;text-align:center;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -367,16 +1077,120 @@ input:focus { border-color: var(--accent); }
 .modal-btn { flex:1; padding:14px; border-radius:12px; border:none; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; }
 .modal-btn.cancel { background:var(--surface2); color:var(--sub); }
 .modal-btn.ok { background:var(--accent); color:#fff; }
+
+/* 日付詳細 */
+.detail-item { padding:12px 0; border-bottom:1px solid var(--border); }
+.detail-item:last-child { border-bottom:none; }
+.detail-company { font-size:13px; font-weight:900; margin-bottom:2px; }
+.detail-partno  { font-size:11px; color:var(--sub); margin-bottom:6px; font-family:'DM Mono',monospace; }
+.detail-row { display:flex; justify-content:space-between; font-size:12px; margin-bottom:2px; }
+.detail-row span:first-child { color:var(--sub); }
+.detail-row span:last-child  { font-family:'DM Mono',monospace; font-weight:700; }
+.detail-del-btn { margin-top:8px; padding:7px 14px; border-radius:9px; border:1.5px solid var(--border); background:var(--red-dim); color:var(--red); font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; }
+
+/* ── Firebase設定シート ── */
+.fb-sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s}
+.fb-sheet-overlay.open{opacity:1;pointer-events:all}
+.fb-sheet{width:100%;background:var(--surface);border-radius:20px 20px 0 0;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);max-height:92vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+.fb-sheet-overlay.open .fb-sheet{transform:translateY(0)}
+.fb-shandle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:11px auto 0;flex-shrink:0}
+.fb-shdr{padding:14px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.fb-sttl{font-size:15px;font-weight:700}
+.fb-sbody{padding:18px;overflow-y:auto;flex:1}
+.fb-sftr{padding:11px 18px 8px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:10px}
+.fb-guide{background:#FCF0EB;border:1.5px solid rgba(200,90,46,.2);border-radius:12px;padding:13px;margin-bottom:14px}
+.fb-guide-title{font-size:12px;font-weight:700;color:var(--accent);margin-bottom:5px}
+.fb-guide-text{font-size:12px;color:var(--sub);line-height:1.7}
+.fb-status-card{border-radius:12px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+.fb-status-card.ok{background:#EAF5EF;color:#3A7D58}
+.fb-status-card.ng{background:#FCEAEA;color:#AA2828}
+.fb-status-card.pending{background:#FBF5E0;color:#9A7A18}
+.fb-fl{font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:6px;display:block}
+.fb-ta{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:11px;padding:12px 14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text);outline:none;resize:none;height:140px;line-height:1.6;transition:border-color .15s}
+.fb-ta:focus{border-color:var(--accent)}
+.fb-preview{background:#EAF5EF;border:1.5px solid #3A7D58;border-radius:11px;padding:11px 13px;font-size:11px;font-family:'DM Mono',monospace;color:#3A7D58;line-height:1.8;word-break:break-all;margin-top:8px;display:none}
+.fb-error{background:#FCEAEA;border:1.5px solid #AA2828;border-radius:11px;padding:10px 13px;font-size:12px;color:#AA2828;font-weight:500;margin-top:8px;display:none}
+.qr-scan-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;background:#EAF5EF;color:#3A7D58;border:1.5px solid #3A7D58;border-radius:12px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;margin-bottom:10px}
+.fb-btn{flex:1;padding:14px;border-radius:12px;border:none;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+.fb-btn.primary{background:var(--accent);color:#fff}
+.fb-btn.secondary{background:var(--surface2);color:var(--sub);border:1.5px solid var(--border)}
+/* QRスキャナー */
+.qr-overlay{position:fixed;inset:0;background:#000;z-index:400;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .25s}
+.qr-overlay.open{opacity:1;pointer-events:all}
+.qr-qhdr{height:52px;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0}
+.qr-video-wrap{flex:1;position:relative;overflow:hidden}
+.qr-video-wrap video{width:100%;height:100%;object-fit:cover}
+.qr-frame-box{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.qr-frame-inner{width:220px;height:220px;border:3px solid var(--accent);border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
+.qr-hint-txt{position:absolute;bottom:24px;left:0;right:0;text-align:center;color:#fff;font-size:13px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.qr-success-banner{position:absolute;inset:0;background:rgba(58,125,88,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#fff;font-size:16px;font-weight:700}
+/* sync banner */
+.sync-banner{background:#FBF5E0;border-bottom:1px solid rgba(154,122,24,.2);padding:7px 16px;font-size:11px;color:#9A7A18;font-weight:600;display:none;align-items:center;gap:8px;flex-shrink:0}
+.sync-spinner{width:14px;height:14px;border:2px solid rgba(154,122,24,.3);border-top-color:#9A7A18;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 
 <div class="hdr">
-  <div class="hdr-logo">
-    <div class="logo-mark">⅓</div>
-    <div class="hdr-title">賞味期限チェック計算機[ver.0.6]</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+    <div class="hdr-logo" style="margin-bottom:0">
+      <div class="logo-mark">⅓</div>
+      <div class="hdr-title">賞味期限チェック計算機[ver.0.9]</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div id="fb-dot" title="Firebase接続状態" style="width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.3);flex-shrink:0;transition:background .3s"></div>
+      <button id="btn-settings" style="width:34px;height:34px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">⚙️</button>
+    </div>
   </div>
   <div class="hdr-sub">1/3ルール ー 賞味期限から在庫落とし日を算出</div>
+</div>
+
+<!-- 同期バナー -->
+<div class="sync-banner" id="sync-banner">
+  <div class="sync-spinner"></div>
+  <span id="sync-msg">同期中...</span>
+</div>
+
+<!-- Firebase 設定シート -->
+<div class="fb-sheet-overlay" id="fb-sheet-overlay">
+  <div class="fb-sheet">
+    <div class="fb-shandle"></div>
+    <div class="fb-shdr"><div class="fb-sttl">⚙️ Firebase 設定</div><button onclick="closeFbSheet()" style="width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);font-size:13px;cursor:pointer;color:var(--sub)">✕</button></div>
+    <div class="fb-sbody">
+      <div id="fb-status-area"></div>
+      <div class="fb-guide">
+        <div class="fb-guide-title">📋 設定方法</div>
+        <div class="fb-guide-text">① Firebaseコンソール → プロジェクト設定 → マイアプリ → <strong>「構成」</strong>を選択<br>② <code>const firebaseConfig = { … }</code> をすべてコピー<br>③ 下に貼り付けて「接続する」をタップ<br><br>または <strong>QRコードでスキャン</strong> も可能です。</div>
+      </div>
+      <button class="qr-scan-btn" id="btn-qr-scan">📷　QRコードでスキャン</button>
+      <label class="fb-fl">Firebase設定コードを貼り付け</label>
+      <textarea class="fb-ta" id="cfg-paste" placeholder="const firebaseConfig = {&#10;  apiKey: &quot;...&quot;,&#10;  databaseURL: &quot;https://...&quot;,&#10;  ...&#10;};"></textarea>
+      <div class="fb-preview" id="cfg-preview"></div>
+      <div class="fb-error"   id="cfg-error"></div>
+    </div>
+    <div style="padding:8px 18px 0;flex-shrink:0">
+      <button class="fb-btn" id="btn-cfg-url" style="width:100%;background:var(--purple-dim,#F3EDFF);color:var(--purple,#6A3EA1);border:1.5px solid var(--purple,#6A3EA1);margin-bottom:8px;display:none">🔗 接続用URLを生成・共有</button>
+    </div>
+    <div class="fb-sftr">
+      <button class="fb-btn secondary" id="btn-cfg-clear">切断</button>
+      <button class="fb-btn primary"   id="btn-cfg-save">接続する</button>
+    </div>
+  </div>
+</div>
+
+<!-- QRスキャナー -->
+<div class="qr-overlay" id="qr-overlay">
+  <div class="qr-qhdr">
+    <span style="color:#fff;font-size:14px;font-weight:700">📷 QRコードをスキャン</span>
+    <button id="qr-close" style="width:34px;height:34px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:16px;cursor:pointer">✕</button>
+  </div>
+  <div class="qr-video-wrap">
+    <video id="qr-video" playsinline muted></video>
+    <div class="qr-frame-box"><div class="qr-frame-inner"></div></div>
+    <div class="qr-hint-txt">🔲 QRコードを枠内に合わせてください</div>
+    <div class="qr-success-banner" id="qr-success-banner"><span style="font-size:42px">✅</span><span>設定を読み取りました！</span></div>
+  </div>
 </div>
 
 <div class="scroll">
@@ -464,15 +1278,29 @@ input:focus { border-color: var(--accent); }
     </div>
   </div><!-- /panel-cal -->
 
-  <!-- 名前入力モーダル -->
+  <!-- 登録モーダル -->
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal-box">
       <div class="modal-title">📌 在庫落とし日を登録</div>
-      <input type="text" class="modal-input" id="modal-name" placeholder="商品名・メモ（任意）" maxlength="30">
+      <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:5px">会社名</div>
+      <input type="text" class="modal-input" id="modal-company" placeholder="例：株式会社〇〇" maxlength="40">
+      <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:5px">品番</div>
+      <input type="text" class="modal-input" id="modal-partno" placeholder="例：AB-1234" maxlength="30">
       <div class="modal-btns">
         <button class="modal-btn cancel" onclick="closeModal()">キャンセル</button>
         <button class="modal-btn ok" onclick="confirmRegister()">登録する</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 日付詳細モーダル -->
+  <div class="modal-overlay" id="detail-overlay">
+    <div class="modal-box">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="modal-title" style="margin:0" id="detail-title">詳細</div>
+        <button class="modal-btn cancel" style="width:36px;height:36px;padding:0;border-radius:10px;flex:none" onclick="closeDetail()">✕</button>
+      </div>
+      <div id="detail-list"></div>
     </div>
   </div>
 
@@ -804,12 +1632,15 @@ document.getElementById('bulk-calc-btn').addEventListener('click', () => {
 
 
 
-  const rows_html = results.map(r => `
-    <tr>
+  const rows_html = results.map((r,i) => {
+    const btnId = 'bulk-reg-btn-' + i;
+    return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(r.exp)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700">${fmt(r.rd)}</td>
       <td><span class="status-badge ${r.cls}">${r.emoji} ${r.dtrN>=0?'残'+r.dtrN+'日':Math.abs(r.dtrN)+'日超過'}</span></td>
-    </tr>`).join('');
+      <td><button class="action-btn register" id="${btnId}" style="padding:5px 10px;font-size:11px;white-space:nowrap" onclick="openModal('${r.rd}','${fmt(r.exp)}','${r.shelf}','${btnId}')">📌</button></td>
+    </tr>`;
+  }).join('');
 
   document.getElementById('bulk-result-area').innerHTML = `
     <div class="card">
@@ -817,7 +1648,7 @@ document.getElementById('bulk-calc-btn').addEventListener('click', () => {
       <div style="overflow-x:auto">
         <table class="bulk-result-table">
           <thead><tr>
-            <th>賞味期限</th><th>在庫落とし日</th><th>状態</th>
+            <th>賞味期限</th><th>在庫落とし日</th><th>状態</th><th>登録</th>
           </tr></thead>
           <tbody>${rows_html}</tbody>
         </table>
@@ -886,24 +1717,96 @@ function addCalendar(dateStr, title) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// ── 登録データ管理 ──
-const REG_KEY = 'cal_registrations_v1';
+// ── 登録データ管理（Firebase + localStorage フォールバック） ──
+const REG_KEY      = 'cal_registrations_v1';
+const FB_CFG_KEY   = 'fb_config_v1';
+let   _db          = null;
+let   _fbConnected = false;
+let   _regs        = [];   // メモリキャッシュ
 
-function loadRegs() {
-  try { return JSON.parse(localStorage.getItem(REG_KEY)) || []; } catch(e) { return []; }
-}
+// ローカル読み書き
+function localLoadRegs()  { try { return JSON.parse(localStorage.getItem(REG_KEY))||[]; } catch(e){ return []; } }
+function localSaveRegs(l) { try { localStorage.setItem(REG_KEY, JSON.stringify(l)); } catch(e){} }
+
+// 外部から呼ぶAPI（互換維持）
+function loadRegs()  { return _regs; }
 function saveRegs(list) {
-  try { localStorage.setItem(REG_KEY, JSON.stringify(list)); } catch(e) {}
+  _regs = list;
+  localSaveRegs(list);
+  if (_db) {
+    // Firebaseへ書き込み（オブジェクト形式）
+    const obj = {};
+    list.forEach(r => { obj[r.id] = r; });
+    showSync('保存中...');
+    _db.ref('registrations').set(obj)
+      .then(hideSync)
+      .catch(e => { hideSync(); console.error(e); });
+  }
+}
+
+// Firebase初期化
+function loadFbConfig() { try { return JSON.parse(localStorage.getItem(FB_CFG_KEY)); } catch(e){ return null; } }
+function saveFbConfig(c){ localStorage.setItem(FB_CFG_KEY, JSON.stringify(c)); }
+function clearFbConfig(){ localStorage.removeItem(FB_CFG_KEY); }
+
+function initFirebase(cfg) {
+  try {
+    if (firebase.apps.length) firebase.apps.forEach(a => a.delete().catch(()=>{}));
+    firebase.initializeApp(cfg);
+    _db = firebase.database();
+    // 接続監視
+    _db.ref('.info/connected').on('value', snap => {
+      _fbConnected = snap.val() === true;
+      const dot = document.getElementById('fb-dot');
+      if (dot) dot.style.background = _fbConnected ? '#6fcf97' : 'rgba(255,255,255,.3)';
+    });
+    // リアルタイム同期
+    showSync('Firebaseからデータ取得中...');
+    _db.ref('registrations').on('value', snap => {
+      const data = snap.val();
+      _regs = data ? Object.values(data) : [];
+      localSaveRegs(_regs);
+      hideSync();
+      if (document.getElementById('panel-cal') &&
+          document.getElementById('panel-cal').style.display !== 'none') renderCalendar();
+    }, err => { hideSync(); console.error(err); });
+    return true;
+  } catch(e) { console.error(e); return false; }
+}
+
+function deleteReg(id) {
+  _regs = _regs.filter(r => r.id !== id);
+  localSaveRegs(_regs);
+  if (_db) {
+    showSync('削除中...');
+    _db.ref('registrations/' + id).remove().then(hideSync).catch(e=>{ hideSync(); console.error(e); });
+  }
+  renderCalendar();
+}
+
+// 同期バナー
+let _syncTimer = null;
+function showSync(msg) {
+  clearTimeout(_syncTimer);
+  const b = document.getElementById('sync-banner');
+  document.getElementById('sync-msg').textContent = msg || '同期中...';
+  b.style.display = 'flex';
+}
+function hideSync() {
+  _syncTimer = setTimeout(() => {
+    document.getElementById('sync-banner').style.display = 'none';
+  }, 600);
 }
 
 // ── モーダル ──
 let _pendingReg = null;
 
-function openModal(rd, expiry, shelf) {
-  _pendingReg = { rd, expiry, shelf };
-  document.getElementById('modal-name').value = '';
+function openModal(rd, expiry, shelf, btnId) {
+  _pendingReg = { rd, expiry, shelf, btnId: btnId||'btn-register' };
+  document.getElementById('modal-company').value = '';
+  document.getElementById('modal-partno').value  = '';
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('modal-name').focus(), 300);
+  setTimeout(() => document.getElementById('modal-company').focus(), 300);
 }
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
@@ -911,19 +1814,21 @@ function closeModal() {
 }
 function confirmRegister() {
   if (!_pendingReg) return;
-  const name = document.getElementById('modal-name').value.trim() || '未設定';
+  const company = document.getElementById('modal-company').value.trim() || '未設定';
+  const partno  = document.getElementById('modal-partno').value.trim()  || '';
   const regs = loadRegs();
   regs.push({
     id: Date.now(),
-    name,
-    rd: _pendingReg.rd,
+    company,
+    partno,
+    rd:     _pendingReg.rd,
     expiry: _pendingReg.expiry,
-    shelf: _pendingReg.shelf,
+    shelf:  _pendingReg.shelf,
   });
   saveRegs(regs);
   closeModal();
   // ボタンを登録済み表示
-  const btn = document.getElementById('btn-register');
+  const btn = document.getElementById(_pendingReg.btnId);
   if (btn) {
     btn.classList.add('registered');
     btn.textContent = '✅ 登録済み';
@@ -933,8 +1838,13 @@ function confirmRegister() {
 document.getElementById('modal-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-overlay')) closeModal();
 });
-document.getElementById('modal-name').addEventListener('keydown', e => {
-  if (e.key === 'Enter') confirmRegister();
+document.getElementById('detail-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('detail-overlay')) closeDetail();
+});
+['modal-company','modal-partno'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmRegister();
+  });
 });
 
 // ── カレンダー描画 ──
@@ -994,11 +1904,16 @@ function renderCalendar() {
 
     // この日に登録があるか
     const hits = regs.filter(r => r.rd === dateStr);
-    const dotsHtml = hits.map(r =>
-      `<div class="cal-dot ${getStatusCls(r.rd)}" title="${r.name}">${r.name}</div>`
-    ).join('');
+    const dotsHtml = hits.map(r => {
+      const label = r.company || r.name || '未設定';
+      return `<div class="cal-dot ${getStatusCls(r.rd)}">${label}</div>`;
+    }).join('');
 
     cell.innerHTML = `<div class="cal-day-num">${d}</div><div class="cal-dots">${dotsHtml}</div>`;
+    if (hits.length > 0) {
+      cell.style.cursor = 'pointer';
+      cell.addEventListener('click', () => openDetail(dateStr, hits));
+    }
     grid.appendChild(cell);
   }
 
@@ -1032,7 +1947,7 @@ function renderRegList(regs) {
     const statusLabel = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
     return `<div class="reg-item">
       <div class="reg-info">
-        <div class="reg-name">${r.name}</div>
+        <div class="reg-name">${r.company||r.name||'未設定'}${r.partno?' <span style="font-size:11px;color:var(--sub);font-family:DM Mono,monospace">'+r.partno+'</span>':''}</div>
         <div class="reg-dates">
           在庫落とし日：${fmt(r.rd)}　<span class="status-badge ${cls}">${statusLabel}</span><br>
           賞味期限：${r.expiry}　基本：${r.shelf}日
@@ -1043,10 +1958,276 @@ function renderRegList(regs) {
   }).join('');
 }
 
-function deleteReg(id) {
-  const regs = loadRegs().filter(r => r.id !== id);
-  saveRegs(regs);
+// deleteReg は Firebase管理セクションで定義済み
+
+// ── 日付詳細モーダル ──
+function openDetail(dateStr, hits) {
+  document.getElementById('detail-title').textContent =
+    dateStr.replace(/-/g, '/') + ' の在庫落とし日';
+  const regs = loadRegs();
+  // hitsのIDで最新データを取得
+  const items = hits.map(h => regs.find(r => r.id === h.id) || h);
+  document.getElementById('detail-list').innerHTML = items.map(r => {
+    const cls = getStatusCls(r.rd);
+    const d   = daysLeft(r.rd);
+    const statusLabel = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
+    return `<div class="detail-item">
+      <div class="detail-company">${r.company||r.name||'未設定'}</div>
+      ${r.partno ? `<div class="detail-partno">品番：${r.partno}</div>` : ''}
+      <div class="detail-row"><span>在庫落とし日</span><span>${fmt(r.rd)} <span class="status-badge ${cls}" style="font-size:10px">${statusLabel}</span></span></div>
+      <div class="detail-row"><span>賞味期限</span><span>${r.expiry||r.rd}</span></div>
+      <div class="detail-row"><span>基本賞味期限</span><span>${r.shelf||'-'}日</span></div>
+      <button class="detail-del-btn" onclick="deleteRegFromDetail(${r.id},'${dateStr}',${JSON.stringify(items.map(x=>({id:x.id,rd:x.rd,company:x.company||x.name||'',partno:x.partno||'',expiry:x.expiry||'',shelf:x.shelf||''})))})">🗑 削除</button>
+    </div>`;
+  }).join('');
+  document.getElementById('detail-overlay').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').classList.remove('open');
+}
+
+function deleteRegFromDetail(id, dateStr, items) {
+  deleteReg(id);
+  // 残りのアイテムで詳細を再表示
+  const remaining = items.filter(r => r.id !== id);
+  if (remaining.length === 0) { closeDetail(); return; }
+  openDetail(dateStr, remaining);
+}
+
+// ════════════════════════════
+//  Firebase 設定UI
+// ════════════════════════════
+function openFbSheet() {
+  const cfg = loadFbConfig() || {};
+  if (cfg.apiKey) {
+    document.getElementById('cfg-paste').value =
+      'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+    showCfgPreview(cfg);
+  } else {
+    document.getElementById('cfg-paste').value = '';
+    hideCfgFeedback();
+  }
+  const area = document.getElementById('fb-status-area');
+  if (!cfg.apiKey) {
+    area.innerHTML = '<div class="fb-status-card ng">❌ 未設定 — 設定コードを貼り付けてください</div>';
+  } else if (_fbConnected) {
+    area.innerHTML = '<div class="fb-status-card ok">✅ Firebase に接続済みです</div>';
+  } else {
+    area.innerHTML = '<div class="fb-status-card pending">⏳ 接続確認中...</div>';
+  }
+  document.getElementById('fb-sheet-overlay').classList.add('open');
+}
+function closeFbSheet() {
+  document.getElementById('fb-sheet-overlay').classList.remove('open');
+}
+document.getElementById('btn-settings').addEventListener('click', openFbSheet);
+document.getElementById('fb-sheet-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('fb-sheet-overlay')) closeFbSheet();
+});
+
+function parseFirebaseConfig(text) {
+  let s = text.trim()
+    .replace(/^\s*(const|let|var)\s+\w+\s*=\s*/, '')
+    .replace(/;\s*$/, '').trim();
+  s = s.replace(/([{,]\s*)([a-zA-Z_]\w*)(\s*:)/g, '$1"$2"$3');
+  const cfg = JSON.parse(s);
+  if (!cfg.apiKey)      throw new Error('"apiKey" が見つかりません');
+  if (!cfg.databaseURL) throw new Error('"databaseURL" が見つかりません');
+  return cfg;
+}
+
+function showCfgPreview(cfg) {
+  const el = document.getElementById('cfg-preview');
+  el.innerHTML = Object.entries(cfg).map(([k,v]) =>
+    `<div><span style="opacity:.6">${k}:</span> ${String(v).slice(0,50)}</div>`
+  ).join('');
+  el.style.display = 'block';
+  document.getElementById('cfg-error').style.display = 'none';
+}
+function showCfgError(msg) {
+  document.getElementById('cfg-preview').style.display = 'none';
+  const el = document.getElementById('cfg-error');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+function hideCfgFeedback() {
+  document.getElementById('cfg-preview').style.display = 'none';
+  document.getElementById('cfg-error').style.display   = 'none';
+}
+
+document.getElementById('cfg-paste').addEventListener('input', function() {
+  const t = this.value.trim();
+  if (!t) { hideCfgFeedback(); return; }
+  try {
+    const cfg = parseFirebaseConfig(t);
+    showCfgPreview(cfg);
+  } catch(e) {
+    if (t.includes('}')) showCfgError(e.message);
+    else hideCfgFeedback();
+  }
+});
+
+document.getElementById('btn-cfg-save').addEventListener('click', () => {
+  const text = document.getElementById('cfg-paste').value.trim();
+  if (!text) { showCfgError('設定コードを貼り付けてください'); return; }
+  let cfg;
+  try { cfg = parseFirebaseConfig(text); } catch(e) { showCfgError(e.message); return; }
+  saveFbConfig(cfg);
+  const ok = initFirebase(cfg);
+  if (ok) { closeFbSheet(); }
+  else    { showCfgError('接続に失敗しました。設定コードを確認してください。'); }
+});
+
+document.getElementById('btn-cfg-clear').addEventListener('click', () => {
+  if (!confirm('Firebase接続を切断しますか？\nローカル保存モードに切り替わります。')) return;
+  clearFbConfig();
+  if (firebase.apps.length) firebase.apps.forEach(a => a.delete().catch(()=>{}));
+  _db = null; _fbConnected = false;
+  document.getElementById('fb-dot').style.background = 'rgba(255,255,255,.3)';
+  _regs = localLoadRegs();
+  closeFbSheet();
   renderCalendar();
+});
+
+// QRスキャナー
+let _qrStream = null, _qrAnim = null;
+function openQRScanner() {
+  document.getElementById('qr-overlay').classList.add('open');
+  document.getElementById('qr-success-banner').style.display = 'none';
+  navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } })
+    .then(stream => {
+      _qrStream = stream;
+      const v = document.getElementById('qr-video');
+      v.srcObject = stream; v.play();
+      requestAnimationFrame(scanQRFrame);
+    })
+    .catch(() => {
+      closeQRScanner();
+      alert('カメラへのアクセスが許可されていません。\nSafari設定 → カメラ → 許可 をご確認ください。');
+    });
+}
+function closeQRScanner() {
+  document.getElementById('qr-overlay').classList.remove('open');
+  if (_qrStream) { _qrStream.getTracks().forEach(t=>t.stop()); _qrStream=null; }
+  if (_qrAnim)   { cancelAnimationFrame(_qrAnim); _qrAnim=null; }
+}
+function scanQRFrame() {
+  const v = document.getElementById('qr-video');
+  if (v.readyState !== v.HAVE_ENOUGH_DATA) { _qrAnim=requestAnimationFrame(scanQRFrame); return; }
+  const c = document.createElement('canvas');
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0);
+  const img  = c.getContext('2d').getImageData(0,0,c.width,c.height);
+  const code = jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+  if (code && code.data.startsWith('fbcfg:')) {
+    try {
+      const cfg = JSON.parse(code.data.slice(6));
+      document.getElementById('qr-success-banner').style.display='flex';
+      if (_qrStream) { _qrStream.getTracks().forEach(t=>t.stop()); _qrStream=null; }
+      setTimeout(() => {
+        closeQRScanner();
+        document.getElementById('cfg-paste').value =
+          'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+        showCfgPreview(cfg);
+        saveFbConfig(cfg);
+        initFirebase(cfg);
+        closeFbSheet();
+      }, 1200);
+      return;
+    } catch(e) {}
+  }
+  _qrAnim = requestAnimationFrame(scanQRFrame);
+}
+document.getElementById('btn-qr-scan').addEventListener('click', openQRScanner);
+document.getElementById('qr-close').addEventListener('click', closeQRScanner);
+
+// ── 初期化：Firebase設定があれば自動接続 ──
+(function init() {
+  _regs = localLoadRegs();
+  const cfg = loadFbConfig();
+  if (cfg && cfg.apiKey && cfg.databaseURL) {
+    initFirebase(cfg); // onValueでデータ取得→_regs更新→renderCalendar
+  }
+})();
+
+// ════════════════════════════
+//  URL共有機能
+// ════════════════════════════
+
+// 起動時：URLにfbcfgパラメータがあれば自動接続
+(function checkUrlCfg() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const enc = params.get('fbcfg');
+    if (!enc) return;
+    const cfg = JSON.parse(atob(enc));
+    if (!cfg.apiKey || !cfg.databaseURL) return;
+    // すでに同じ設定が保存されていればスキップ
+    const existing = loadFbConfig();
+    if (existing && existing.apiKey === cfg.apiKey) return;
+    saveFbConfig(cfg);
+    initFirebase(cfg);
+    // URLからパラメータを除去（履歴を汚さない）
+    const clean = window.location.pathname;
+    history.replaceState(null, '', clean);
+    // 成功トースト表示
+    showToast('✅ FirebaseにURLから自動接続しました');
+  } catch(e) { /* 無効なパラメータは無視 */ }
+})();
+
+// URLを生成してコピー or 共有
+document.getElementById('btn-cfg-url').addEventListener('click', () => {
+  const cfg = loadFbConfig();
+  if (!cfg || !cfg.apiKey) {
+    showToast('⚠️ 先に接続してください');
+    return;
+  }
+  const enc    = btoa(JSON.stringify(cfg));
+  const origin = window.location.origin + window.location.pathname;
+  const url    = origin + '?fbcfg=' + enc;
+
+  if (navigator.share) {
+    navigator.share({
+      title: '賞味期限チェック計算機 - Firebase接続URL',
+      text:  'このURLを開くだけでFirebaseに自動接続されます。',
+      url
+    }).catch(() => copyUrlFallback(url));
+  } else {
+    copyUrlFallback(url);
+  }
+});
+
+function copyUrlFallback(url) {
+  navigator.clipboard.writeText(url)
+    .then(() => showToast('✅ URLをコピーしました！LINEやメールで共有してください'))
+    .catch(() => {
+      // クリップボードも使えない場合はアラートで表示
+      prompt('以下のURLをコピーしてください：', url);
+    });
+}
+
+// 「URLを共有」ボタンの表示制御：接続済みのときだけ表示
+const _origOpenFbSheet = openFbSheet;
+openFbSheet = function() {
+  _origOpenFbSheet();
+  const urlBtn = document.getElementById('btn-cfg-url');
+  if (urlBtn) urlBtn.style.display = loadFbConfig() ? 'block' : 'none';
+};
+
+// ── トースト通知 ──
+function showToast(msg) {
+  let t = document.getElementById('toast-el');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast-el';
+    t.style.cssText = 'position:fixed;bottom:calc(env(safe-area-inset-bottom)+24px);left:50%;transform:translateX(-50%);background:#1E1C18;color:#fff;padding:11px 20px;border-radius:99px;font-size:13px;font-weight:700;z-index:999;opacity:0;transition:opacity .2s;white-space:nowrap;max-width:90vw;text-align:center;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
 }
 </script>
 </body>
