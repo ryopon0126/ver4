@@ -163,6 +163,9 @@ document.getElementById('qr-close').addEventListener('click', closeQRScanner);
   const cfg = loadFbConfig();
   if (cfg && cfg.apiKey && cfg.databaseURL) {
     initFirebase(cfg); // onValueでデータ取得→_regs更新→renderCalendar
+  } else {
+    // Firebase未設定の場合もローカルデータでバナー表示
+    setTimeout(showAlertBanner, 500);
   }
 })();
 
@@ -281,6 +284,103 @@ function setListFilter(f) {
   });
   renderRegList(loadRegs());
 }
+
+// ════════════════════════════
+//  起動時通知バナー
+// ════════════════════════════
+function showAlertBanner() {
+  const regs = loadRegs();
+  // 未処理かつ在庫落とし日まで7日以内 or 超過
+  const urgent = regs.filter(r => {
+    if (r.done) return false;
+    const d = daysLeft(r.rd);
+    return d <= 7;
+  }).sort((a, b) => new Date(a.rd) - new Date(b.rd));
+
+  if (!urgent.length) return;
+
+  const list = document.getElementById('alert-banner-list');
+  list.innerHTML = urgent.map(r => {
+    const d = daysLeft(r.rd);
+    const isPassed = d < 0;
+    const label = isPassed ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
+    const badgeCls = isPassed ? 'passed' : 'urgent';
+    return `<div class="alert-item">
+      <div>
+        <div class="alert-item-name">${r.company||r.name||'未設定'}${r.partno?' · '+r.partno:''}</div>
+        <div class="alert-item-date">在庫落とし日：${fmt(r.rd)}</div>
+      </div>
+      <span class="alert-item-badge ${badgeCls}">${label}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('alert-banner').classList.add('show');
+}
+
+// ════════════════════════════
+//  会社名サジェスト
+// ════════════════════════════
+function getCompanyHistory() {
+  const regs = loadRegs();
+  const seen = new Set();
+  const list = [];
+  [...regs].reverse().forEach(r => {
+    const name = (r.company || r.name || '').trim();
+    if (name && name !== '未設定' && !seen.has(name)) {
+      seen.add(name);
+      list.push(name);
+    }
+  });
+  return list;
+}
+
+function showSuggest(val) {
+  const wrap = document.getElementById('company-suggest');
+  const all  = getCompanyHistory();
+  const q    = val.trim().toLowerCase();
+  const matches = q
+    ? all.filter(n => n.toLowerCase().includes(q))
+    : all;
+
+  if (!matches.length) { wrap.style.display = 'none'; return; }
+
+  wrap.innerHTML = matches.slice(0, 6).map(name => {
+    let html = name;
+    if (q) {
+      const idx = name.toLowerCase().indexOf(q);
+      html = name.slice(0, idx)
+        + `<span class="suggest-match">${name.slice(idx, idx + q.length)}</span>`
+        + name.slice(idx + q.length);
+    }
+    return `<div class="suggest-item" data-name="${name.replace(/"/g,'&quot;')}">${html}</div>`;
+  }).join('');
+  wrap.style.display = 'block';
+
+  wrap.querySelectorAll('.suggest-item').forEach(el => {
+    el.addEventListener('mousedown', e => e.preventDefault()); // blur防止
+    el.addEventListener('click', () => {
+      document.getElementById('modal-company').value = el.dataset.name;
+      hideSuggest();
+      document.getElementById('modal-partno').focus();
+    });
+  });
+}
+
+function hideSuggest() {
+  const wrap = document.getElementById('company-suggest');
+  if (wrap) wrap.style.display = 'none';
+}
+
+// 入力イベント
+document.getElementById('modal-company').addEventListener('input', function() {
+  showSuggest(this.value);
+});
+document.getElementById('modal-company').addEventListener('focus', function() {
+  showSuggest(this.value);
+});
+document.getElementById('modal-company').addEventListener('blur', () => {
+  setTimeout(hideSuggest, 150);
+});
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js">
 // ════════════════════════════
@@ -436,6 +536,9 @@ document.getElementById('qr-close').addEventListener('click', closeQRScanner);
   const cfg = loadFbConfig();
   if (cfg && cfg.apiKey && cfg.databaseURL) {
     initFirebase(cfg); // onValueでデータ取得→_regs更新→renderCalendar
+  } else {
+    // Firebase未設定の場合もローカルデータでバナー表示
+    setTimeout(showAlertBanner, 500);
   }
 })();
 
@@ -554,6 +657,103 @@ function setListFilter(f) {
   });
   renderRegList(loadRegs());
 }
+
+// ════════════════════════════
+//  起動時通知バナー
+// ════════════════════════════
+function showAlertBanner() {
+  const regs = loadRegs();
+  // 未処理かつ在庫落とし日まで7日以内 or 超過
+  const urgent = regs.filter(r => {
+    if (r.done) return false;
+    const d = daysLeft(r.rd);
+    return d <= 7;
+  }).sort((a, b) => new Date(a.rd) - new Date(b.rd));
+
+  if (!urgent.length) return;
+
+  const list = document.getElementById('alert-banner-list');
+  list.innerHTML = urgent.map(r => {
+    const d = daysLeft(r.rd);
+    const isPassed = d < 0;
+    const label = isPassed ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
+    const badgeCls = isPassed ? 'passed' : 'urgent';
+    return `<div class="alert-item">
+      <div>
+        <div class="alert-item-name">${r.company||r.name||'未設定'}${r.partno?' · '+r.partno:''}</div>
+        <div class="alert-item-date">在庫落とし日：${fmt(r.rd)}</div>
+      </div>
+      <span class="alert-item-badge ${badgeCls}">${label}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('alert-banner').classList.add('show');
+}
+
+// ════════════════════════════
+//  会社名サジェスト
+// ════════════════════════════
+function getCompanyHistory() {
+  const regs = loadRegs();
+  const seen = new Set();
+  const list = [];
+  [...regs].reverse().forEach(r => {
+    const name = (r.company || r.name || '').trim();
+    if (name && name !== '未設定' && !seen.has(name)) {
+      seen.add(name);
+      list.push(name);
+    }
+  });
+  return list;
+}
+
+function showSuggest(val) {
+  const wrap = document.getElementById('company-suggest');
+  const all  = getCompanyHistory();
+  const q    = val.trim().toLowerCase();
+  const matches = q
+    ? all.filter(n => n.toLowerCase().includes(q))
+    : all;
+
+  if (!matches.length) { wrap.style.display = 'none'; return; }
+
+  wrap.innerHTML = matches.slice(0, 6).map(name => {
+    let html = name;
+    if (q) {
+      const idx = name.toLowerCase().indexOf(q);
+      html = name.slice(0, idx)
+        + `<span class="suggest-match">${name.slice(idx, idx + q.length)}</span>`
+        + name.slice(idx + q.length);
+    }
+    return `<div class="suggest-item" data-name="${name.replace(/"/g,'&quot;')}">${html}</div>`;
+  }).join('');
+  wrap.style.display = 'block';
+
+  wrap.querySelectorAll('.suggest-item').forEach(el => {
+    el.addEventListener('mousedown', e => e.preventDefault()); // blur防止
+    el.addEventListener('click', () => {
+      document.getElementById('modal-company').value = el.dataset.name;
+      hideSuggest();
+      document.getElementById('modal-partno').focus();
+    });
+  });
+}
+
+function hideSuggest() {
+  const wrap = document.getElementById('company-suggest');
+  if (wrap) wrap.style.display = 'none';
+}
+
+// 入力イベント
+document.getElementById('modal-company').addEventListener('input', function() {
+  showSuggest(this.value);
+});
+document.getElementById('modal-company').addEventListener('focus', function() {
+  showSuggest(this.value);
+});
+document.getElementById('modal-company').addEventListener('blur', () => {
+  setTimeout(hideSuggest, 150);
+});
 </script>
 <!-- QRスキャン -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js">
@@ -710,6 +910,9 @@ document.getElementById('qr-close').addEventListener('click', closeQRScanner);
   const cfg = loadFbConfig();
   if (cfg && cfg.apiKey && cfg.databaseURL) {
     initFirebase(cfg); // onValueでデータ取得→_regs更新→renderCalendar
+  } else {
+    // Firebase未設定の場合もローカルデータでバナー表示
+    setTimeout(showAlertBanner, 500);
   }
 })();
 
@@ -828,6 +1031,103 @@ function setListFilter(f) {
   });
   renderRegList(loadRegs());
 }
+
+// ════════════════════════════
+//  起動時通知バナー
+// ════════════════════════════
+function showAlertBanner() {
+  const regs = loadRegs();
+  // 未処理かつ在庫落とし日まで7日以内 or 超過
+  const urgent = regs.filter(r => {
+    if (r.done) return false;
+    const d = daysLeft(r.rd);
+    return d <= 7;
+  }).sort((a, b) => new Date(a.rd) - new Date(b.rd));
+
+  if (!urgent.length) return;
+
+  const list = document.getElementById('alert-banner-list');
+  list.innerHTML = urgent.map(r => {
+    const d = daysLeft(r.rd);
+    const isPassed = d < 0;
+    const label = isPassed ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
+    const badgeCls = isPassed ? 'passed' : 'urgent';
+    return `<div class="alert-item">
+      <div>
+        <div class="alert-item-name">${r.company||r.name||'未設定'}${r.partno?' · '+r.partno:''}</div>
+        <div class="alert-item-date">在庫落とし日：${fmt(r.rd)}</div>
+      </div>
+      <span class="alert-item-badge ${badgeCls}">${label}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('alert-banner').classList.add('show');
+}
+
+// ════════════════════════════
+//  会社名サジェスト
+// ════════════════════════════
+function getCompanyHistory() {
+  const regs = loadRegs();
+  const seen = new Set();
+  const list = [];
+  [...regs].reverse().forEach(r => {
+    const name = (r.company || r.name || '').trim();
+    if (name && name !== '未設定' && !seen.has(name)) {
+      seen.add(name);
+      list.push(name);
+    }
+  });
+  return list;
+}
+
+function showSuggest(val) {
+  const wrap = document.getElementById('company-suggest');
+  const all  = getCompanyHistory();
+  const q    = val.trim().toLowerCase();
+  const matches = q
+    ? all.filter(n => n.toLowerCase().includes(q))
+    : all;
+
+  if (!matches.length) { wrap.style.display = 'none'; return; }
+
+  wrap.innerHTML = matches.slice(0, 6).map(name => {
+    let html = name;
+    if (q) {
+      const idx = name.toLowerCase().indexOf(q);
+      html = name.slice(0, idx)
+        + `<span class="suggest-match">${name.slice(idx, idx + q.length)}</span>`
+        + name.slice(idx + q.length);
+    }
+    return `<div class="suggest-item" data-name="${name.replace(/"/g,'&quot;')}">${html}</div>`;
+  }).join('');
+  wrap.style.display = 'block';
+
+  wrap.querySelectorAll('.suggest-item').forEach(el => {
+    el.addEventListener('mousedown', e => e.preventDefault()); // blur防止
+    el.addEventListener('click', () => {
+      document.getElementById('modal-company').value = el.dataset.name;
+      hideSuggest();
+      document.getElementById('modal-partno').focus();
+    });
+  });
+}
+
+function hideSuggest() {
+  const wrap = document.getElementById('company-suggest');
+  if (wrap) wrap.style.display = 'none';
+}
+
+// 入力イベント
+document.getElementById('modal-company').addEventListener('input', function() {
+  showSuggest(this.value);
+});
+document.getElementById('modal-company').addEventListener('focus', function() {
+  showSuggest(this.value);
+});
+document.getElementById('modal-company').addEventListener('blur', () => {
+  setTimeout(hideSuggest, 150);
+});
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -1349,6 +1649,57 @@ input:focus { border-color: var(--accent); }
   border-radius: 6px; padding: 1px 7px; margin-left: 6px;
   vertical-align: middle;
 }
+
+/* ── 通知バナー ── */
+.alert-banner {
+  display: none; flex-direction: column; gap: 6px;
+  background: var(--red-dim);
+  border-bottom: 2px solid rgba(170,40,40,.2);
+  padding: 10px 16px;
+  flex-shrink: 0;
+}
+.alert-banner.show { display: flex; }
+.alert-banner-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.alert-banner-title { font-size: 12px; font-weight: 900; color: var(--red); }
+.alert-banner-close {
+  width: 24px; height: 24px; border-radius: 6px;
+  border: 1px solid rgba(170,40,40,.3); background: none;
+  font-size: 11px; cursor: pointer; color: var(--red);
+  display: flex; align-items: center; justify-content: center;
+}
+.alert-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: #fff; border-radius: 9px; padding: 8px 12px;
+  font-size: 12px; border: 1px solid rgba(170,40,40,.15);
+}
+.alert-item-name { font-weight: 700; color: var(--text); }
+.alert-item-date { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--sub); margin-top: 1px; }
+.alert-item-badge {
+  font-size: 11px; font-weight: 700; padding: 3px 9px;
+  border-radius: 20px; white-space: nowrap; flex-shrink: 0;
+}
+.alert-item-badge.urgent { background: var(--red-dim); color: var(--red); border: 1px solid rgba(170,40,40,.3); }
+.alert-item-badge.passed { background: var(--purple-dim); color: var(--purple); border: 1px solid rgba(106,62,161,.3); }
+
+/* ── 会社名サジェスト ── */
+.suggest-wrap { position: relative; }
+.suggest-list {
+  position: absolute; top: calc(100% + 2px); left: 0; right: 0;
+  background: var(--surface); border: 1.5px solid var(--accent);
+  border-radius: 12px; z-index: 100; overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0,0,0,.1);
+  max-height: 180px; overflow-y: auto;
+}
+.suggest-item {
+  padding: 12px 16px; font-size: 14px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.suggest-item:last-child { border-bottom: none; }
+.suggest-item:active, .suggest-item:hover { background: var(--surface2); }
+.suggest-match { color: var(--accent); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -1371,6 +1722,15 @@ input:focus { border-color: var(--accent); }
 <div class="sync-banner" id="sync-banner">
   <div class="sync-spinner"></div>
   <span id="sync-msg">同期中...</span>
+</div>
+
+<!-- 通知バナー -->
+<div class="alert-banner" id="alert-banner">
+  <div class="alert-banner-hdr">
+    <div class="alert-banner-title">⚠️ 在庫落とし日が近い商品があります</div>
+    <button class="alert-banner-close" onclick="document.getElementById('alert-banner').classList.remove('show')">✕</button>
+  </div>
+  <div id="alert-banner-list"></div>
 </div>
 
 <!-- Firebase 設定シート -->
@@ -1525,7 +1885,11 @@ input:focus { border-color: var(--accent); }
       <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:5px">担当者名</div>
       <input type="text" class="modal-input" id="modal-person" placeholder="例：山田 太郎" maxlength="30" autocomplete="name">
       <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:5px">会社名</div>
-      <input type="text" class="modal-input" id="modal-company" placeholder="例：株式会社〇〇" maxlength="40">
+      <div class="suggest-wrap">
+        <input type="text" class="modal-input" id="modal-company" placeholder="例：株式会社〇〇" maxlength="40" autocomplete="off" style="margin-bottom:0">
+        <div class="suggest-list" id="company-suggest" style="display:none"></div>
+      </div>
+      <div style="height:12px"></div>
       <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:5px">品番</div>
       <input type="text" class="modal-input" id="modal-partno" placeholder="例：AB-1234" maxlength="30">
       <div class="modal-btns">
@@ -2011,6 +2375,9 @@ function initFirebase(cfg) {
       hideSync();
       if (document.getElementById('panel-cal') &&
           document.getElementById('panel-cal').style.display !== 'none') renderCalendar();
+      if (document.getElementById('panel-list') &&
+          document.getElementById('panel-list').style.display !== 'none') renderRegList(_regs);
+      showAlertBanner();
     }, err => { hideSync(); console.error(err); });
     return true;
   } catch(e) { console.error(e); return false; }
@@ -2048,6 +2415,7 @@ function openModal(rd, expiry, shelf, btnId) {
   document.getElementById('modal-person').value  = '';
   document.getElementById('modal-company').value = '';
   document.getElementById('modal-partno').value  = '';
+  hideSuggest();
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('modal-person').focus(), 300);
 }
@@ -2480,6 +2848,9 @@ document.getElementById('qr-close').addEventListener('click', closeQRScanner);
   const cfg = loadFbConfig();
   if (cfg && cfg.apiKey && cfg.databaseURL) {
     initFirebase(cfg); // onValueでデータ取得→_regs更新→renderCalendar
+  } else {
+    // Firebase未設定の場合もローカルデータでバナー表示
+    setTimeout(showAlertBanner, 500);
   }
 })();
 
@@ -2598,5 +2969,102 @@ function setListFilter(f) {
   });
   renderRegList(loadRegs());
 }
+
+// ════════════════════════════
+//  起動時通知バナー
+// ════════════════════════════
+function showAlertBanner() {
+  const regs = loadRegs();
+  // 未処理かつ在庫落とし日まで7日以内 or 超過
+  const urgent = regs.filter(r => {
+    if (r.done) return false;
+    const d = daysLeft(r.rd);
+    return d <= 7;
+  }).sort((a, b) => new Date(a.rd) - new Date(b.rd));
+
+  if (!urgent.length) return;
+
+  const list = document.getElementById('alert-banner-list');
+  list.innerHTML = urgent.map(r => {
+    const d = daysLeft(r.rd);
+    const isPassed = d < 0;
+    const label = isPassed ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
+    const badgeCls = isPassed ? 'passed' : 'urgent';
+    return `<div class="alert-item">
+      <div>
+        <div class="alert-item-name">${r.company||r.name||'未設定'}${r.partno?' · '+r.partno:''}</div>
+        <div class="alert-item-date">在庫落とし日：${fmt(r.rd)}</div>
+      </div>
+      <span class="alert-item-badge ${badgeCls}">${label}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('alert-banner').classList.add('show');
+}
+
+// ════════════════════════════
+//  会社名サジェスト
+// ════════════════════════════
+function getCompanyHistory() {
+  const regs = loadRegs();
+  const seen = new Set();
+  const list = [];
+  [...regs].reverse().forEach(r => {
+    const name = (r.company || r.name || '').trim();
+    if (name && name !== '未設定' && !seen.has(name)) {
+      seen.add(name);
+      list.push(name);
+    }
+  });
+  return list;
+}
+
+function showSuggest(val) {
+  const wrap = document.getElementById('company-suggest');
+  const all  = getCompanyHistory();
+  const q    = val.trim().toLowerCase();
+  const matches = q
+    ? all.filter(n => n.toLowerCase().includes(q))
+    : all;
+
+  if (!matches.length) { wrap.style.display = 'none'; return; }
+
+  wrap.innerHTML = matches.slice(0, 6).map(name => {
+    let html = name;
+    if (q) {
+      const idx = name.toLowerCase().indexOf(q);
+      html = name.slice(0, idx)
+        + `<span class="suggest-match">${name.slice(idx, idx + q.length)}</span>`
+        + name.slice(idx + q.length);
+    }
+    return `<div class="suggest-item" data-name="${name.replace(/"/g,'&quot;')}">${html}</div>`;
+  }).join('');
+  wrap.style.display = 'block';
+
+  wrap.querySelectorAll('.suggest-item').forEach(el => {
+    el.addEventListener('mousedown', e => e.preventDefault()); // blur防止
+    el.addEventListener('click', () => {
+      document.getElementById('modal-company').value = el.dataset.name;
+      hideSuggest();
+      document.getElementById('modal-partno').focus();
+    });
+  });
+}
+
+function hideSuggest() {
+  const wrap = document.getElementById('company-suggest');
+  if (wrap) wrap.style.display = 'none';
+}
+
+// 入力イベント
+document.getElementById('modal-company').addEventListener('input', function() {
+  showSuggest(this.value);
+});
+document.getElementById('modal-company').addEventListener('focus', function() {
+  showSuggest(this.value);
+});
+document.getElementById('modal-company').addEventListener('blur', () => {
+  setTimeout(hideSuggest, 150);
+});
 </script>
 </body>
