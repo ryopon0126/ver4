@@ -251,6 +251,21 @@ function toggleHowto() {
   const isOpen = body.classList.toggle('open');
   arrow.classList.toggle('open', isOpen);
 }
+
+// ── 登録一覧 折りたたみ ──
+function toggleRegList() {
+  const body  = document.getElementById('reglist-body');
+  const arrow = document.getElementById('reglist-arrow');
+  const isOpen = body.classList.toggle('open');
+  if (isOpen) body.style.maxHeight = '1200px';
+  else        body.style.maxHeight = '0';
+  arrow.classList.toggle('open', isOpen);
+}
+
+// ── 登録一覧 検索 ──
+function filterRegList() {
+  renderRegList(loadRegs());
+}
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js">
 // ════════════════════════════
@@ -493,6 +508,21 @@ function toggleHowto() {
   const arrow = document.getElementById('howto-arrow');
   const isOpen = body.classList.toggle('open');
   arrow.classList.toggle('open', isOpen);
+}
+
+// ── 登録一覧 折りたたみ ──
+function toggleRegList() {
+  const body  = document.getElementById('reglist-body');
+  const arrow = document.getElementById('reglist-arrow');
+  const isOpen = body.classList.toggle('open');
+  if (isOpen) body.style.maxHeight = '1200px';
+  else        body.style.maxHeight = '0';
+  arrow.classList.toggle('open', isOpen);
+}
+
+// ── 登録一覧 検索 ──
+function filterRegList() {
+  renderRegList(loadRegs());
 }
 </script>
 <!-- QRスキャン -->
@@ -737,6 +767,21 @@ function toggleHowto() {
   const arrow = document.getElementById('howto-arrow');
   const isOpen = body.classList.toggle('open');
   arrow.classList.toggle('open', isOpen);
+}
+
+// ── 登録一覧 折りたたみ ──
+function toggleRegList() {
+  const body  = document.getElementById('reglist-body');
+  const arrow = document.getElementById('reglist-arrow');
+  const isOpen = body.classList.toggle('open');
+  if (isOpen) body.style.maxHeight = '1200px';
+  else        body.style.maxHeight = '0';
+  arrow.classList.toggle('open', isOpen);
+}
+
+// ── 登録一覧 検索 ──
+function filterRegList() {
+  renderRegList(loadRegs());
 }
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1380,8 +1425,19 @@ input:focus { border-color: var(--accent); }
       <div class="cal-grid" id="cal-grid"></div>
     </div>
     <div class="card" id="reg-list-card">
-      <div class="card-title">📌 登録済み一覧</div>
-      <div id="reg-list"></div>
+      <button class="howto-toggle" onclick="toggleRegList()" id="reglist-toggle-btn" style="margin-bottom:0">
+        <div class="card-title" style="margin:0">📌 登録済み一覧 <span id="reg-count-badge" style="font-size:10px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:20px;font-weight:700;margin-left:6px;vertical-align:middle"></span></div>
+        <span class="howto-arrow" id="reglist-arrow">▼</span>
+      </button>
+      <div class="howto-body open" id="reglist-body" style="max-height:1200px">
+        <div style="height:10px"></div>
+        <div style="position:relative;margin-bottom:10px">
+          <input type="text" id="reg-search" placeholder="🔍 会社名・品番・担当者名で検索"
+            style="width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;font-size:13px;font-family:inherit;color:var(--text);outline:none;"
+            oninput="filterRegList()" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+        </div>
+        <div id="reg-list"></div>
+      </div>
     </div>
   </div><!-- /panel-cal -->
 
@@ -1389,6 +1445,8 @@ input:focus { border-color: var(--accent); }
   <div class="modal-overlay" id="modal-overlay">
     <div class="modal-box">
       <div class="modal-title">📌 在庫落とし日を登録</div>
+      <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:5px">担当者名</div>
+      <input type="text" class="modal-input" id="modal-person" placeholder="例：山田 太郎" maxlength="30" autocomplete="name">
       <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:5px">会社名</div>
       <input type="text" class="modal-input" id="modal-company" placeholder="例：株式会社〇〇" maxlength="40">
       <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.04em;margin-bottom:5px">品番</div>
@@ -1911,10 +1969,11 @@ let _pendingReg = null;
 
 function openModal(rd, expiry, shelf, btnId) {
   _pendingReg = { rd, expiry, shelf, btnId: btnId||'btn-register' };
+  document.getElementById('modal-person').value  = '';
   document.getElementById('modal-company').value = '';
   document.getElementById('modal-partno').value  = '';
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('modal-company').focus(), 300);
+  setTimeout(() => document.getElementById('modal-person').focus(), 300);
 }
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
@@ -1922,11 +1981,13 @@ function closeModal() {
 }
 function confirmRegister() {
   if (!_pendingReg) return;
+  const person  = document.getElementById('modal-person').value.trim()  || '';
   const company = document.getElementById('modal-company').value.trim() || '未設定';
   const partno  = document.getElementById('modal-partno').value.trim()  || '';
   const regs = loadRegs();
   regs.push({
     id: Date.now(),
+    person,
     company,
     partno,
     rd:     _pendingReg.rd,
@@ -1949,7 +2010,7 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 document.getElementById('detail-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('detail-overlay')) closeDetail();
 });
-['modal-company','modal-partno'].forEach(id => {
+['modal-person','modal-company','modal-partno'].forEach(id => {
   document.getElementById(id).addEventListener('keydown', e => {
     if (e.key === 'Enter') confirmRegister();
   });
@@ -2042,20 +2103,36 @@ function renderCalendar() {
 }
 
 function renderRegList(regs) {
+  // 件数バッジ更新
+  const badge = document.getElementById('reg-count-badge');
+  if (badge) badge.textContent = regs.length ? regs.length + '件' : '';
+
+  const keyword = (document.getElementById('reg-search')||{value:''}).value.trim().toLowerCase();
+  const filtered = keyword
+    ? regs.filter(r =>
+        (r.company||r.name||'').toLowerCase().includes(keyword) ||
+        (r.partno||'').toLowerCase().includes(keyword) ||
+        (r.person||'').toLowerCase().includes(keyword)
+      )
+    : regs;
+
   const el = document.getElementById('reg-list');
-  if (!regs.length) {
-    el.innerHTML = '<div style="text-align:center;padding:20px 0;font-size:13px;color:var(--sub)">登録済みのアイテムはありません</div>';
+  if (!filtered.length) {
+    el.innerHTML = `<div style="text-align:center;padding:20px 0;font-size:13px;color:var(--sub)">${keyword ? '該当する登録がありません' : '登録済みのアイテムはありません'}</div>`;
     return;
   }
-  // 在庫落とし日順にソート
-  const sorted = [...regs].sort((a,b) => new Date(a.rd) - new Date(b.rd));
+  const sorted = [...filtered].sort((a,b) => new Date(a.rd) - new Date(b.rd));
   el.innerHTML = sorted.map(r => {
     const cls = getStatusCls(r.rd);
     const d   = daysLeft(r.rd);
     const statusLabel = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
     return `<div class="reg-item">
       <div class="reg-info">
-        <div class="reg-name">${r.company||r.name||'未設定'}${r.partno?' <span style="font-size:11px;color:var(--sub);font-family:DM Mono,monospace">'+r.partno+'</span>':''}</div>
+        <div class="reg-name">
+          ${r.company||r.name||'未設定'}
+          ${r.partno?`<span style="font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;margin-left:5px">${r.partno}</span>`:''}
+        </div>
+        ${r.person?`<div style="font-size:11px;color:var(--sub);margin-bottom:2px">👤 ${r.person}</div>`:''}
         <div class="reg-dates">
           在庫落とし日：${fmt(r.rd)}　<span class="status-badge ${cls}">${statusLabel}</span><br>
           賞味期限：${r.expiry}　基本：${r.shelf}日
@@ -2075,7 +2152,7 @@ function openDetail(dateStr, hits) {
   const regs = loadRegs();
   // hitsのIDで最新データを取得
   const items = hits.map(h => regs.find(r => r.id === h.id) || h);
-  const safeItems = items.map(x=>({id:x.id,rd:x.rd,company:x.company||x.name||'',partno:x.partno||'',expiry:x.expiry||'',shelf:x.shelf||''}));
+  const safeItems = items.map(x=>({id:x.id,rd:x.rd,company:x.company||x.name||'',partno:x.partno||'',person:x.person||'',expiry:x.expiry||'',shelf:x.shelf||''}));
   document.getElementById('detail-list').innerHTML = items.map(r => {
     const cls = getStatusCls(r.rd);
     const d   = daysLeft(r.rd);
@@ -2085,6 +2162,7 @@ function openDetail(dateStr, hits) {
       <div class="detail-item-hdr">
         <div>
           <div class="detail-company">${r.company||r.name||'未設定'}</div>
+      ${r.person?`<div style="font-size:11px;color:var(--sub);margin-top:2px">👤 ${r.person}</div>`:''}
           ${r.partno ? `<div class="detail-partno">${r.partno}</div>` : ''}
         </div>
         <div class="detail-status-big ${cls}">${statusLabel}</div>
@@ -2365,6 +2443,21 @@ function toggleHowto() {
   const arrow = document.getElementById('howto-arrow');
   const isOpen = body.classList.toggle('open');
   arrow.classList.toggle('open', isOpen);
+}
+
+// ── 登録一覧 折りたたみ ──
+function toggleRegList() {
+  const body  = document.getElementById('reglist-body');
+  const arrow = document.getElementById('reglist-arrow');
+  const isOpen = body.classList.toggle('open');
+  if (isOpen) body.style.maxHeight = '1200px';
+  else        body.style.maxHeight = '0';
+  arrow.classList.toggle('open', isOpen);
+}
+
+// ── 登録一覧 検索 ──
+function filterRegList() {
+  renderRegList(loadRegs());
 }
 </script>
 </body>
