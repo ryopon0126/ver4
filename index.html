@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="1/3計算">
 <meta name="theme-color" content="#1a1a2e">
-<title>賞味期限チェック計算機[ver.0.9]</title>
+<title>賞味期限チェック計算機[ver.1.0]</title>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js">
 // ════════════════════════════
@@ -1076,14 +1076,56 @@ input:focus { border-color: var(--accent); }
 .modal-btn.ok { background:var(--accent); color:#fff; }
 
 /* 日付詳細 */
-.detail-item { padding:12px 0; border-bottom:1px solid var(--border); }
-.detail-item:last-child { border-bottom:none; }
-.detail-company { font-size:13px; font-weight:900; margin-bottom:2px; }
-.detail-partno  { font-size:11px; color:var(--sub); margin-bottom:6px; font-family:'DM Mono',monospace; }
-.detail-row { display:flex; justify-content:space-between; font-size:12px; margin-bottom:2px; }
-.detail-row span:first-child { color:var(--sub); }
-.detail-row span:last-child  { font-family:'DM Mono',monospace; font-weight:700; }
-.detail-del-btn { margin-top:8px; padding:7px 14px; border-radius:9px; border:1.5px solid var(--border); background:var(--red-dim); color:var(--red); font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; }
+.detail-item {
+  background: var(--surface2);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.detail-item:last-child { margin-bottom: 0; }
+.detail-item-hdr {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 10px; margin-bottom: 12px;
+}
+.detail-company {
+  font-size: 15px; font-weight: 900; line-height: 1.3;
+  color: var(--text);
+}
+.detail-partno {
+  display: inline-block; margin-top: 4px;
+  font-size: 11px; font-family: 'DM Mono', monospace;
+  color: var(--sub); background: var(--border);
+  padding: 2px 8px; border-radius: 6px;
+}
+.detail-status-big {
+  flex-shrink: 0;
+  padding: 5px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.detail-status-big.ok     { background: var(--green-dim); color: var(--green); }
+.detail-status-big.soon   { background: var(--yellow-dim); color: var(--yellow); }
+.detail-status-big.urgent { background: var(--red-dim); color: var(--red); }
+.detail-status-big.passed { background: var(--purple-dim); color: var(--purple); }
+.detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; margin-bottom: 12px;
+}
+.detail-cell {
+  background: var(--surface); border-radius: 10px;
+  padding: 10px 12px;
+}
+.detail-cell-label { font-size: 10px; font-weight: 700; color: var(--sub); letter-spacing: .06em; margin-bottom: 4px; }
+.detail-cell-value { font-size: 13px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--text); }
+.detail-cell.full { grid-column: 1 / -1; }
+.detail-cell-value.accent { color: var(--accent); font-size: 16px; }
+.detail-del-btn {
+  width: 100%; padding: 10px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--surface);
+  color: var(--red); font-size: 13px; font-weight: 700;
+  font-family: inherit; cursor: pointer;
+  transition: all .12s;
+}
+.detail-del-btn:active { background: var(--red-dim); border-color: var(--red); }
 
 /* ── Firebase設定シート ── */
 .fb-sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s}
@@ -1133,7 +1175,7 @@ input:focus { border-color: var(--accent); }
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
     <div class="hdr-logo" style="margin-bottom:0">
       <div class="logo-mark">⅓</div>
-      <div class="hdr-title">賞味期限チェック計算機[ver.0.9]</div>
+      <div class="hdr-title">賞味期限チェック計算機[ver.1.0]</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <div id="fb-dot" title="Firebase接続状態" style="width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.3);flex-shrink:0;transition:background .3s"></div>
@@ -1292,12 +1334,12 @@ input:focus { border-color: var(--accent); }
 
   <!-- 日付詳細モーダル -->
   <div class="modal-overlay" id="detail-overlay">
-    <div class="modal-box">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div class="modal-box" style="max-height:80vh;display:flex;flex-direction:column;padding-bottom:calc(env(safe-area-inset-bottom)+20px)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-shrink:0">
         <div class="modal-title" style="margin:0" id="detail-title">詳細</div>
         <button class="modal-btn cancel" style="width:36px;height:36px;padding:0;border-radius:10px;flex:none" onclick="closeDetail()">✕</button>
       </div>
-      <div id="detail-list"></div>
+      <div id="detail-list" style="overflow-y:auto;flex:1"></div>
     </div>
   </div>
 
@@ -1334,10 +1376,18 @@ function daysLeft(dateStr) {
   return Math.ceil((d - t) / 86400000);
 }
 
+// タイムゾーンずれを起こさないローカル日付フォーマット
+function toLocalDateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function removalDate(expiry, shelf) {
   const d = new Date(expiry);
   d.setDate(d.getDate() - Math.floor(shelf / 3));
-  return d.toISOString().split('T')[0];
+  return toLocalDateStr(d);
 }
 
 function fmt(dateStr) {
@@ -1893,7 +1943,7 @@ function renderCalendar() {
   // 当月セル
   for (let d = 1; d <= lastDay.getDate(); d++) {
     const date = new Date(calYear, calMonth, d);
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toLocalDateStr(date);
     const isToday = date.getTime() === today.getTime();
 
     const cell = document.createElement('div');
@@ -1964,17 +2014,39 @@ function openDetail(dateStr, hits) {
   const regs = loadRegs();
   // hitsのIDで最新データを取得
   const items = hits.map(h => regs.find(r => r.id === h.id) || h);
+  const safeItems = items.map(x=>({id:x.id,rd:x.rd,company:x.company||x.name||'',partno:x.partno||'',expiry:x.expiry||'',shelf:x.shelf||''}));
   document.getElementById('detail-list').innerHTML = items.map(r => {
     const cls = getStatusCls(r.rd);
     const d   = daysLeft(r.rd);
-    const statusLabel = d < 0 ? `${Math.abs(d)}日超過` : d === 0 ? '本日' : `残${d}日`;
+    const statusLabel = d < 0 ? `🚨 ${Math.abs(d)}日超過` : d === 0 ? '⚠️ 本日' : d <= 7 ? `⚠️ 残${d}日` : `残${d}日`;
+    const rmDays = r.shelf ? Math.floor(Number(r.shelf)/3) : '-';
     return `<div class="detail-item">
-      <div class="detail-company">${r.company||r.name||'未設定'}</div>
-      ${r.partno ? `<div class="detail-partno">品番：${r.partno}</div>` : ''}
-      <div class="detail-row"><span>在庫落とし日</span><span>${fmt(r.rd)} <span class="status-badge ${cls}" style="font-size:10px">${statusLabel}</span></span></div>
-      <div class="detail-row"><span>賞味期限</span><span>${r.expiry||r.rd}</span></div>
-      <div class="detail-row"><span>基本賞味期限</span><span>${r.shelf||'-'}日</span></div>
-      <button class="detail-del-btn" onclick="deleteRegFromDetail(${r.id},'${dateStr}',${JSON.stringify(items.map(x=>({id:x.id,rd:x.rd,company:x.company||x.name||'',partno:x.partno||'',expiry:x.expiry||'',shelf:x.shelf||''})))})">🗑 削除</button>
+      <div class="detail-item-hdr">
+        <div>
+          <div class="detail-company">${r.company||r.name||'未設定'}</div>
+          ${r.partno ? `<div class="detail-partno">${r.partno}</div>` : ''}
+        </div>
+        <div class="detail-status-big ${cls}">${statusLabel}</div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-cell full">
+          <div class="detail-cell-label">在庫落とし日</div>
+          <div class="detail-cell-value accent">${fmt(r.rd)}</div>
+        </div>
+        <div class="detail-cell">
+          <div class="detail-cell-label">賞味期限</div>
+          <div class="detail-cell-value">${r.expiry||'-'}</div>
+        </div>
+        <div class="detail-cell">
+          <div class="detail-cell-label">基本賞味期限</div>
+          <div class="detail-cell-value">${r.shelf||'-'}日</div>
+        </div>
+        <div class="detail-cell full">
+          <div class="detail-cell-label">計算式</div>
+          <div class="detail-cell-value" style="font-size:12px">${r.expiry||'-'} − ${rmDays}日 = ${fmt(r.rd)}</div>
+        </div>
+      </div>
+      <button class="detail-del-btn" onclick="deleteRegFromDetail(${r.id},'${dateStr}',${JSON.stringify(safeItems)})">🗑　削除</button>
     </div>`;
   }).join('');
   document.getElementById('detail-overlay').classList.add('open');
