@@ -243,6 +243,14 @@ function showToast(msg) {
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
 }
+
+// ── 使い方 折りたたみ ──
+function toggleHowto() {
+  const body  = document.getElementById('howto-body');
+  const arrow = document.getElementById('howto-arrow');
+  const isOpen = body.classList.toggle('open');
+  arrow.classList.toggle('open', isOpen);
+}
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js">
 // ════════════════════════════
@@ -477,6 +485,14 @@ function showToast(msg) {
   t.style.opacity = '1';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
+
+// ── 使い方 折りたたみ ──
+function toggleHowto() {
+  const body  = document.getElementById('howto-body');
+  const arrow = document.getElementById('howto-arrow');
+  const isOpen = body.classList.toggle('open');
+  arrow.classList.toggle('open', isOpen);
 }
 </script>
 <!-- QRスキャン -->
@@ -713,6 +729,14 @@ function showToast(msg) {
   t.style.opacity = '1';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
+
+// ── 使い方 折りたたみ ──
+function toggleHowto() {
+  const body  = document.getElementById('howto-body');
+  const arrow = document.getElementById('howto-arrow');
+  const isOpen = body.classList.toggle('open');
+  arrow.classList.toggle('open', isOpen);
 }
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1167,6 +1191,50 @@ input:focus { border-color: var(--accent); }
 .sync-banner{background:#FBF5E0;border-bottom:1px solid rgba(154,122,24,.2);padding:7px 16px;font-size:11px;color:#9A7A18;font-weight:600;display:none;align-items:center;gap:8px;flex-shrink:0}
 .sync-spinner{width:14px;height:14px;border:2px solid rgba(154,122,24,.3);border-top-color:#9A7A18;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── 使い方 折りたたみ ── */
+.howto-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none; padding: 0;
+  background: none; border: none; width: 100%; font-family: inherit;
+}
+.howto-toggle:active { opacity: .7; }
+.howto-arrow {
+  font-size: 13px; color: var(--sub);
+  transition: transform .25s ease;
+  display: inline-block;
+}
+.howto-arrow.open { transform: rotate(180deg); }
+.howto-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .35s ease, opacity .25s ease;
+  opacity: 0;
+}
+.howto-body.open {
+  max-height: 800px;
+  opacity: 1;
+}
+.howto-step {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.howto-step:last-child { border-bottom: none; padding-bottom: 0; }
+.howto-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 2px;
+}
+.howto-text { font-size: 13px; color: var(--sub); line-height: 1.7; }
+.howto-text strong { color: var(--text); }
+.howto-text .tag {
+  display: inline-block; background: var(--accent);
+  color: #fff; font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 5px; margin: 0 2px;
+  vertical-align: middle;
+}
 </style>
 </head>
 <body>
@@ -1345,24 +1413,38 @@ input:focus { border-color: var(--accent); }
 
   <!-- 使い方 -->
   <div class="card">
-    <div class="card-title">📖 使い方</div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div style="display:flex;align-items:flex-start;gap:12px">
-        <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">1</div>
-        <div style="font-size:13px;color:var(--sub);line-height:1.7"><strong style="color:var(--text)">賞味期限</strong>を入力してください。<br>商品パッケージに記載されている日付を選択します。</div>
+    <button class="howto-toggle" onclick="toggleHowto()" id="howto-toggle-btn">
+      <div class="card-title" style="margin:0">📖 使い方</div>
+      <span class="howto-arrow" id="howto-arrow">▼</span>
+    </button>
+    <div class="howto-body" id="howto-body">
+      <div style="height:12px"></div>
+
+      <div class="howto-step">
+        <div class="howto-num">1</div>
+        <div class="howto-text"><strong>賞味期限</strong>を入力してください。<br>商品パッケージに記載されている日付を選択します。</div>
       </div>
-      <div style="display:flex;align-items:flex-start;gap:12px">
-        <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">2</div>
-        <div style="font-size:13px;color:var(--sub);line-height:1.7"><strong style="color:var(--text)">基本賞味期限</strong>を選択または入力してください。<br>商品の製造日から賞味期限までの総日数です。</div>
+      <div class="howto-step">
+        <div class="howto-num">2</div>
+        <div class="howto-text"><strong>基本賞味期限（日数）</strong>を選択または直接入力してください。<br>商品の製造日から賞味期限までの総日数です。</div>
       </div>
-      <div style="display:flex;align-items:flex-start;gap:12px">
-        <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">3</div>
-        <div style="font-size:13px;color:var(--sub);line-height:1.7">「<strong style="color:var(--text)">在庫落とし日を計算する</strong>」を押すと、<br>1/3ルールに基づいた在庫落とし日が表示されます。</div>
+      <div class="howto-step">
+        <div class="howto-num">3</div>
+        <div class="howto-text">「<strong>在庫落とし日を計算する</strong>」を押すと、1/3ルールに基づいた在庫落とし日が表示されます。</div>
       </div>
-      <div style="display:flex;align-items:flex-start;gap:12px">
-        <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">4</div>
-        <div style="font-size:13px;color:var(--sub);line-height:1.7"><strong style="color:var(--text)">よく使う日数の追加方法：</strong><br>日数を入力後、選択肢の右端にある <strong style="color:var(--accent)">「＋ 追加」</strong> を押すと選択肢に保存されます。不要になった選択肢は各ボタンの <strong style="color:var(--text)">「✕」</strong> で削除できます。</div>
+      <div class="howto-step">
+        <div class="howto-num">4</div>
+        <div class="howto-text"><strong>よく使う日数の追加：</strong><br>日数を入力後、選択肢の右端の <span class="tag">＋ 追加</span> を押すと保存されます。不要になったボタンの <strong>✕</strong> で削除できます。</div>
       </div>
+      <div class="howto-step">
+        <div class="howto-num">5</div>
+        <div class="howto-text"><strong>カレンダーへの登録方法：</strong><br>計算結果の下にある <span class="tag">📌 カレンダーに登録</span> をタップ → 会社名・品番を入力して「登録する」を押します。<br>登録後は上部の <strong>📅 カレンダー</strong> タブから確認できます。日付をタップすると詳細が表示されます。</div>
+      </div>
+      <div class="howto-step">
+        <div class="howto-num">6</div>
+        <div class="howto-text"><strong>複数端末での共有：</strong><br>⚙️ から Firebase を設定すると、複数のスマートフォンでデータをリアルタイム同期できます。設定後に <strong>「🔗 接続用URLを生成・共有」</strong> を使うとURLを送るだけで他端末も接続できます。</div>
+      </div>
+
     </div>
   </div>
 
@@ -1597,7 +1679,6 @@ function calculate() {
       <div class="action-btns">
         <button class="action-btn copy" onclick="copyResult('${fmt(rd)}','${fmt(expiry)}','${shelf}','${dtrNum}','${statusText}')">📋 コピー</button>
         <button class="action-btn share" onclick="shareResult('${fmt(rd)}','${fmt(expiry)}','${shelf}','${statusText}')">🔗 共有</button>
-        <button class="action-btn cal" onclick="addCalendar('${rd}','在庫落とし日')">📅 ics</button>
       </div>
       <div class="action-btns" style="margin-top:6px">
         <button class="action-btn register" id="btn-register" onclick="openModal('${rd}','${fmt(expiry)}','${shelf}')">📌 カレンダーに登録</button>
@@ -1742,27 +1823,7 @@ function doShare(text) {
   }
 }
 
-// ── カレンダー追加 ──
-function addCalendar(dateStr, title) {
-  const d = new Date(dateStr);
-  const pad = n => String(n).padStart(2,'0');
-  const ymd = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
-  // iCalendar形式
-  const ics = [
-    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//ShelfCalc//JP',
-    'BEGIN:VEVENT',
-    `DTSTART;VALUE=DATE:${ymd}`,
-    `DTEND;VALUE=DATE:${ymd}`,
-    `SUMMARY:${title}（賞味期限チェック計算機）`,
-    `DESCRIPTION:在庫落とし日です。確認してください。`,
-    'END:VEVENT','END:VCALENDAR'
-  ].join('\r\n');
-  const blob = new Blob([ics], { type:'text/calendar' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = '在庫落とし日.ics'; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+
 
 // ── 登録データ管理（Firebase + localStorage フォールバック） ──
 const REG_KEY      = 'cal_registrations_v1';
@@ -2296,6 +2357,14 @@ function showToast(msg) {
   t.style.opacity = '1';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
+
+// ── 使い方 折りたたみ ──
+function toggleHowto() {
+  const body  = document.getElementById('howto-body');
+  const arrow = document.getElementById('howto-arrow');
+  const isOpen = body.classList.toggle('open');
+  arrow.classList.toggle('open', isOpen);
 }
 </script>
 </body>
