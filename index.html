@@ -708,11 +708,12 @@ document.getElementById('bulk-calc-btn').addEventListener('click', () => {
 
   // 在庫落とし日順にソート
   results.sort((a,b) => new Date(a.rd) - new Date(b.rd));
-
-  // コピー用テキスト作成
-  const copyText = results.map((r,i) =>
+  // コピー用テキストをグローバルに保存
+  window._bulkCopyText = results.map((r,i) =>
     `${i+1}. 賞味期限:${fmt(r.exp)} 基本賞味期限:${r.shelf}日 → 在庫落とし日:${fmt(r.rd)}（${r.dtrN>=0?'残'+r.dtrN+'日':Math.abs(r.dtrN)+'日超過'}）`
   ).join('\n');
+
+
 
   const rows_html = results.map(r => `
     <tr>
@@ -745,8 +746,8 @@ function copyResult(rd, expiry, shelf, dtr, status) {
   copyToClipboard(text, 'copy-btn-single');
 }
 
-function copyBulk(text) {
-  copyToClipboard('【一括計算結果】\n' + text, 'bulk-copy-btn');
+function copyBulk() {
+  copyToClipboard('【一括計算結果】\n' + (window._bulkCopyText||''), 'bulk-copy-btn');
 }
 
 function copyToClipboard(text, btnId) {
@@ -765,7 +766,7 @@ function shareResult(rd, expiry, shelf, status) {
   const text = `【在庫落とし日チェック結果】\n在庫落とし日：${rd}\n賞味期限：${expiry}\n基本賞味期限：${shelf}日\n状態：${status}`;
   doShare(text);
 }
-function shareBulk(text) { doShare('【一括計算結果】\n' + text); }
+function shareBulk() { doShare('【一括計算結果】\n' + (window._bulkCopyText||'')); }
 function doShare(text) {
   if (navigator.share) {
     navigator.share({ title:'賞味期限チェック計算機', text }).catch(()=>{});
@@ -797,4 +798,3 @@ function addCalendar(dateStr, title) {
 }
 </script>
 </body>
-</html>
