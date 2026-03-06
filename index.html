@@ -1615,7 +1615,7 @@ function renderCalendar() {
       return `<div class="cal-dot ${cls}">${label}</div>`;
     }).join('');
     if(hits.length>2) dots+=`<div class="cal-dot ok">+${hits.length-2}</div>`;
-    html+=`<div class="cal-day${isToday?' today':''}" data-cal="${dateStr}"${hits.length?' has-items':''}>
+    html+=`<div class="cal-day${isToday?' today':''} ${hits.length?'has-items':''}" data-cal="${dateStr}">
       <span>${d2}</span>${dots}
     </div>`;
   }
