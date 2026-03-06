@@ -104,7 +104,9 @@ body{
   background:#fff;border-radius:8px;padding:9px 12px;
   display:flex;align-items:center;justify-content:space-between;
   border:1px solid rgba(232,52,26,.1);
+  transition:background .12s;
 }
+.alert-item:active{background:var(--acc-bg)}
 .alert-item-name{font-size:12px;font-weight:700}
 .alert-item-date{font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;margin-top:1px}
 
@@ -2024,7 +2026,7 @@ function showAlertBanner(){
     const d=daysLeft(r.rd);
     const isPassed=d<0;
     const label=isPassed?`${Math.abs(d)}日超過`:d===0?'本日':`残${d}日`;
-    return `<div class="alert-item">
+    return `<div class="alert-item" data-rd="${r.rd}" style="cursor:pointer">
       <div>
         <div class="alert-item-name">${r.company||r.name||'未設定'}${r.partno?' · '+r.partno:''}</div>
         <div class="alert-item-date">在庫落とし日：${fmt(r.rd)}</div>
@@ -2032,6 +2034,22 @@ function showAlertBanner(){
       <span class="badge ${isPassed?'passed':'urgent'}">${label}</span>
     </div>`;
   }).join('');
+
+  // アイテムタップ → カレンダータブへ遷移して詳細を開く
+  list.querySelectorAll('.alert-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const rd = el.dataset.rd;
+      document.getElementById('alert-banner').classList.remove('show');
+      // カレンダーを該当月に移動
+      const d = new Date(rd);
+      _calYear  = d.getFullYear();
+      _calMonth = d.getMonth();
+      switchTab('cal');
+      // カレンダー描画後に詳細を開く
+      setTimeout(() => openDetail(rd), 150);
+    });
+  });
+
   document.getElementById('alert-banner').classList.add('show');
 }
 
