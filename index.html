@@ -1615,11 +1615,18 @@ function renderCalendar() {
       return `<div class="cal-dot ${cls}">${label}</div>`;
     }).join('');
     if(hits.length>2) dots+=`<div class="cal-dot ok">+${hits.length-2}</div>`;
-    html+=`<div class="cal-day${isToday?' today':''}${hits.length?' has-items':''}" ${hits.length?`onclick="openDetail('${dateStr}',${JSON.stringify(hits).replace(/'/g,"\\'")})"`:''}>
+    html+=`<div class="cal-day${isToday?' today':''}" data-cal="${dateStr}"${hits.length?' has-items':''}>
       <span>${d2}</span>${dots}
     </div>`;
   }
-  document.getElementById('cal-grid').innerHTML = html;
+  const calGrid = document.getElementById('cal-grid');
+  calGrid.innerHTML = html;
+  window._calRdMap = rdMap;
+  calGrid.onclick = e => {
+    const cell = e.target.closest('[data-cal]');
+    if (!cell || !cell.classList.contains('has-items')) return;
+    openDetail(cell.dataset.cal);
+  };
 }
 
 // ── 詳細モーダル ──
@@ -1628,6 +1635,8 @@ function openDetail(dateStr, hits) {
   _detailDateStr=dateStr;
   const regs=loadRegs();
   _detailItems=regs.filter(r=>r.rd===dateStr);
+  // フォールバック：引数 or グローバルマップ
+  if(!_detailItems.length && window._calRdMap && window._calRdMap[dateStr]) _detailItems=window._calRdMap[dateStr];
   if(!_detailItems.length && hits) _detailItems=hits;
   document.getElementById('detail-title').textContent=`📅 ${fmt(dateStr)}`;
   document.getElementById('detail-overlay').classList.add('open');
