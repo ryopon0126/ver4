@@ -1205,6 +1205,17 @@ function fmt(dateStr) {
   return `${y}/${m}/${d}`;
 }
 
+
+function fmtDateTime(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth()+1).padStart(2,'0');
+  const da = String(d.getDate()).padStart(2,'0');
+  const h  = String(d.getHours()).padStart(2,'0');
+  const mi = String(d.getMinutes()).padStart(2,'0');
+  return `${y}/${mo}/${da} ${h}:${mi}`;
+}
 function fmtShort(dateStr) {
   const [y,m,d] = dateStr.split('-');
   return `${m}/${d}`;
@@ -1555,7 +1566,8 @@ function confirmRegister() {
   const partno  = document.getElementById('modal-partno').value.trim() || '';
   const regs = loadRegs();
   const id = Date.now();
-  regs.push({id, person, company, partno, rd:_modalRd, expiry:_modalExpiry, shelf:_modalShelf, done:false});
+  const createdAt = new Date().toISOString();
+  regs.push({id, person, company, partno, rd:_modalRd, expiry:_modalExpiry, shelf:_modalShelf, done:false, createdAt});
   saveRegs(regs);
   closeModal();
   updateSummary();
@@ -1651,6 +1663,10 @@ function renderDetailList() {
           <div class="d-cell-lbl">計算式</div>
           <div class="d-cell-val">${r.expiry||'-'} − ${rmDays}日 ＝ ${fmt(r.rd)}</div>
         </div>
+        <div class="d-cell full">
+          <div class="d-cell-lbl">🕐 登録日時</div>
+          <div class="d-cell-val">${fmtDateTime(r.createdAt)}</div>
+        </div>
       </div>
       <div class="d-btns">
         <button class="d-done-btn" data-id="${r.id}" data-done="${r.done?'1':'0'}" data-name="${(r.company||r.name||'').replace(/"/g,'&quot;')}">
@@ -1735,7 +1751,8 @@ function renderRegList(regs) {
         </div>
         <div class="reg-dates">
           在庫落とし日：${fmt(r.rd)}　<span class="badge ${cls}">${statusLabel}</span><br>
-          賞味期限：${r.expiry}　基本：${r.shelf}日
+          賞味期限：${r.expiry}　基本：${r.shelf}日<br>
+          <span style="font-size:10px;color:var(--subtle)">🕐 登録：${fmtDateTime(r.createdAt)}</span>
         </div>
       </div>
       <div class="reg-btns">
