@@ -710,11 +710,14 @@ input[type=date]:focus,input[type=number]:focus{
   width: 18px; height: 18px; cursor: pointer; accent-color: #C85A2E;
   border: none; padding: 0; background: none; border-radius: 4px;
 }
+
 </style>
 </head>
 <body>
 
 <!-- TOP BAR -->
+
+
 <div class="topbar">
   <div class="tb-brand">
     <div class="tb-mark">⅓</div>
@@ -887,7 +890,7 @@ input[type=date]:focus,input[type=number]:focus{
     </div>
     <div class="search-row">
       <span style="font-size:15px;color:var(--subtle)">🔍</span>
-      <input type="text" id="reg-search" placeholder="会社名・品番・担当者名で検索" oninput="filterRegList()">
+      <input type="text" id="reg-search" placeholder="会社名・品番で検索" oninput="filterRegList()">
     </div>
     <div class="filter-row">
       <button class="filter-btn on" id="list-filter-all"    onclick="setListFilter('all')">すべて</button>
@@ -928,8 +931,6 @@ input[type=date]:focus,input[type=number]:focus{
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
-      <label class="form-lbl">担当者名</label>
-      <input type="text" class="form-input" id="modal-person" placeholder="例：山田 太郎" maxlength="30" autocomplete="name">
       <label class="form-lbl">会社名</label>
       <div class="suggest-wrap">
         <input type="text" class="form-input" id="modal-company" placeholder="例：株式会社〇〇" maxlength="40" autocomplete="off">
@@ -956,8 +957,6 @@ input[type=date]:focus,input[type=number]:focus{
       <button class="modal-close" onclick="closeEditModal()">✕</button>
     </div>
     <div class="modal-body">
-      <label class="form-lbl">担当者名</label>
-      <input type="text" class="form-input" id="edit-person" placeholder="例：山田 太郎" maxlength="30">
       <label class="form-lbl">会社名</label>
       <div class="suggest-wrap">
         <input type="text" class="form-input" id="edit-company" placeholder="例：株式会社〇〇" maxlength="40" autocomplete="off">
@@ -1435,6 +1434,7 @@ document.getElementById('howto-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('howto-overlay')) closeHowtoSheet();
 });
 
+
 // ── アップデート通知ポップアップ ──
 const UPDATE_VER_KEY = 'update_seen_v2.0';
 function showUpdatePopup() {
@@ -1460,14 +1460,13 @@ function openBulkRegModal(idx) {
   _bulkRegIdx = idx;
   // 登録モーダルを流用（rd・expiry・shelfを設定）
   _modalRd = r.rd; _modalExpiry = fmt(r.exp); _modalShelf = r.shelf;
-  document.getElementById('modal-person').value  = '';
   document.getElementById('modal-company').value = '';
   document.getElementById('modal-partno').value  = '';
   // モーダルタイトルを変更
   document.getElementById('modal-reg-title').textContent = `📌 登録：${fmt(r.rd)}`;
   hideSuggest();
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('modal-person').focus(), 300);
+  setTimeout(()=>document.getElementById('modal-company').focus(), 300);
 }
 
 // ── コピー・シェア ──
@@ -1552,22 +1551,20 @@ function hideSync()    { document.getElementById('sync-banner').style.display='n
 let _modalRd='', _modalExpiry='', _modalShelf='', _modalBtnId='';
 function openModal(rd, expiry, shelf, btnId) {
   _modalRd=rd; _modalExpiry=expiry; _modalShelf=shelf; _modalBtnId=btnId||'';
-  document.getElementById('modal-person').value  = '';
   document.getElementById('modal-company').value = '';
   document.getElementById('modal-partno').value  = '';
   hideSuggest();
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('modal-person').focus(), 300);
+  setTimeout(()=>document.getElementById('modal-company').focus(), 300);
 }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
 function confirmRegister() {
-  const person  = document.getElementById('modal-person').value.trim() || '';
   const company = document.getElementById('modal-company').value.trim() || '未設定';
   const partno  = document.getElementById('modal-partno').value.trim() || '';
   const regs = loadRegs();
   const id = Date.now();
   const createdAt = new Date().toISOString();
-  regs.push({id, person, company, partno, rd:_modalRd, expiry:_modalExpiry, shelf:_modalShelf, done:false, createdAt});
+  regs.push({id, company, partno, rd:_modalRd, expiry:_modalExpiry, shelf:_modalShelf, done:false, createdAt});
   saveRegs(regs);
   closeModal();
   updateSummary();
@@ -1584,7 +1581,7 @@ function confirmRegister() {
   }
   showToast('✅ 登録しました');
 }
-['modal-person','modal-company','modal-partno'].forEach(id=>{
+['modal-company','modal-partno'].forEach(id=>{
   document.getElementById(id).addEventListener('keydown', e=>{ if(e.key==='Enter') confirmRegister(); });
 });
 document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('modal-overlay')) closeModal(); });
@@ -1652,7 +1649,6 @@ function renderDetailList() {
     const rmDays = r.shelf ? Math.floor(Number(r.shelf)/3) : '-';
     return `<div class="d-card">
       <div class="d-company">${r.company||r.name||'未設定'}${r.done?'<span class="done-badge">✅ 処理済</span>':''}</div>
-      ${r.person?`<div style="font-size:11px;color:var(--sub);margin-bottom:4px">👤 ${r.person}</div>`:''}
       ${r.partno?`<div style="margin-bottom:8px"><span class="reg-partno">${r.partno}</span></div>`:''}
       <div class="d-chip ${chipCls}">${statusLabel}</div>
       <div class="d-grid">
@@ -1743,8 +1739,7 @@ function renderRegList(regs) {
   if(_listFilter==='done')   filtered=filtered.filter(r=>r.done);
   if(keyword) filtered=filtered.filter(r=>
     (r.company||r.name||'').toLowerCase().includes(keyword)||
-    (r.partno||'').toLowerCase().includes(keyword)||
-    (r.person||'').toLowerCase().includes(keyword)
+    (r.partno||'').toLowerCase().includes(keyword)
   );
   const el=document.getElementById('reg-list');
   if(!filtered.length){
@@ -1760,7 +1755,6 @@ function renderRegList(regs) {
         <div class="reg-company">${r.company||r.name||'未設定'}${r.done?'<span class="done-badge">✅ 処理済</span>':''}</div>
         <div class="reg-sub">
           ${r.partno?`<span class="reg-partno">${r.partno}</span>`:''}
-          ${r.person?`<span>👤 ${r.person}</span>`:''}
         </div>
         <div class="reg-dates">
           在庫落とし日：${fmt(r.rd)}　<span class="badge ${cls}">${statusLabel}</span><br>
@@ -1970,26 +1964,24 @@ function openEditModal(id){
   const regs=loadRegs(); const r=regs.find(x=>x.id===id);
   if(!r) return;
   _editingId=id;
-  document.getElementById('edit-person').value  = r.person  ||'';
   document.getElementById('edit-company').value = r.company||r.name||'';
   document.getElementById('edit-partno').value  = r.partno  ||'';
   document.getElementById('edit-expiry').value  = r.expiry  ||'';
   document.getElementById('edit-shelf').value   = r.shelf   ||'';
   hideEditSuggest();
   document.getElementById('edit-overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('edit-person').focus(),300);
+  setTimeout(()=>document.getElementById('edit-company').focus(),300);
 }
 function closeEditModal(){document.getElementById('edit-overlay').classList.remove('open');_editingId=null;hideEditSuggest();}
 function confirmEdit(){
   if(!_editingId) return;
-  const person  = document.getElementById('edit-person').value.trim();
   const company = document.getElementById('edit-company').value.trim()||'未設定';
   const partno  = document.getElementById('edit-partno').value.trim();
   const expiry  = document.getElementById('edit-expiry').value;
   const shelf   = parseInt(document.getElementById('edit-shelf').value);
   if(!expiry||!shelf){showToast('⚠️ 賞味期限と基本賞味期限は必須です');return;}
   const rd=removalDate(expiry,shelf);
-  const regs=loadRegs().map(r=>r.id===_editingId?{...r,person,company,partno,expiry,shelf,rd}:r);
+  const regs=loadRegs().map(r=>r.id===_editingId?{...r,company,partno,expiry,shelf,rd}:r);
   saveRegs(regs);
   closeEditModal();
   renderRegList(loadRegs());
@@ -1998,7 +1990,7 @@ function confirmEdit(){
   showToast('✅ 編集を保存しました');
 }
 document.getElementById('edit-overlay').addEventListener('click',e=>{if(e.target===document.getElementById('edit-overlay'))closeEditModal();});
-['edit-person','edit-company','edit-partno','edit-expiry','edit-shelf'].forEach(id=>{
+['edit-company','edit-partno','edit-expiry','edit-shelf'].forEach(id=>{
   document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')confirmEdit();});
 });
 document.getElementById('edit-company').addEventListener('input',function(){showEditSuggest(this.value);});
@@ -2087,7 +2079,7 @@ function doExportPDF(mode){
     const d=daysLeft(r.rd);
     const sl=d<0?`<span style="color:#7C3AED;font-weight:700">${Math.abs(d)}日超過</span>`:d===0?`<span style="color:#E8341A;font-weight:700">本日</span>`:d<=30?`<span style="color:#E8341A;font-weight:700">残${d}日</span>`:`<span style="color:#16A34A;font-weight:700">残${d}日</span>`;
     const dl=r.done?'<span style="color:#16A34A;font-weight:700">✅ 処理済</span>':'<span style="color:#E8341A">未処理</span>';
-    return `<tr class="${i%2===0?'even':''}${r.done?' done':''}"><td style="text-align:center">${i+1}</td><td>${r.company||r.name||'-'}</td><td style="font-family:monospace">${r.partno||'-'}</td><td>${r.person||'-'}</td><td style="font-family:monospace">${r.expiry||'-'}</td><td style="font-family:monospace;font-weight:700">${fmt(r.rd)}</td><td style="text-align:center">${sl}</td><td style="text-align:center">${dl}</td></tr>`;
+    return `<tr class="${i%2===0?'even':''}${r.done?' done':''}"><td style="text-align:center">${i+1}</td><td>${r.company||r.name||'-'}</td><td style="font-family:monospace">${r.partno||'-'}</td><td style="font-family:monospace">${r.expiry||'-'}</td><td style="font-family:monospace;font-weight:700">${fmt(r.rd)}</td><td style="text-align:center">${sl}</td><td style="text-align:center">${dl}</td></tr>`;
   }).join('');
   const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>在庫落とし日一覧 ${dateLabel}</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
@@ -2163,10 +2155,11 @@ function doExportPDF(mode){
   width: 18px; height: 18px; cursor: pointer; accent-color: #C85A2E;
   border: none; padding: 0; background: none; border-radius: 4px;
 }
+
 </style></head><body>
 <div class="pbtn"><button class="p" onclick="window.print()">🖨️ PDFとして保存</button><button class="c" onclick="window.close()">✕ 閉じる</button></div>
 <div class="hdr"><div><div class="hdr-title">在庫落とし日一覧</div><div style="font-size:9pt;opacity:.85;margin-top:2px">1/3ルール 賞味期限チェック計算機 ver.2.0</div></div><div class="hdr-meta">出力日：${dateLabel}<br>対象：${filterLabel}　件数：${filtered.length}件</div></div>
-<table><thead><tr><th style="width:28px">No.</th><th>会社名</th><th>品番</th><th>担当者名</th><th>賞味期限</th><th>在庫落とし日</th><th style="width:70px">残り日数</th><th style="width:60px">状態</th></tr></thead><tbody>${rows}</tbody></table>
+<table><thead><tr><th style="width:28px">No.</th><th>会社名</th><th>品番</th><th>賞味期限</th><th>在庫落とし日</th><th style="width:70px">残り日数</th><th style="width:60px">状態</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="footer">賞味期限チェック計算機 ver.2.0　／　出力日：${dateLabel}　／　対象：${filterLabel}</div></body></html>`;
   const w=window.open('','_blank');
   if(!w){showToast('⚠️ ポップアップを許可してください');return;}
@@ -2182,9 +2175,11 @@ document.getElementById('pdf-overlay').addEventListener('click',e=>{
   updateSummary();
   renderCalendar();
   const cfg=loadFbConfig();
-  if(cfg&&cfg.apiKey&&cfg.databaseURL){ initFirebase(cfg); }
-  if(!cfg||!cfg.apiKey) showUpdatePopup();
-  else { setTimeout(showAlertBanner,500); }
+  if(cfg&&cfg.apiKey&&cfg.databaseURL){
+    initFirebase(cfg);
+  } else {
+    setTimeout(showAlertBanner, 500);
+  }
   showUpdatePopup();
 })();
 (function checkUrlCfgOnLoad(){})(); // checkUrlCfg is already called above via IIFE
