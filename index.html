@@ -313,6 +313,31 @@ input[type=date]:focus,input[type=number]:focus{
   display:grid;grid-template-columns:1fr 1fr 34px;
   gap:8px;align-items:center;margin-bottom:8px;
 }
+.b-shelf-wrap{
+  position:relative;display:flex;align-items:center;
+}
+.b-shelf{
+  width:100%;padding-right:32px !important;
+}
+.b-shelf-arrow{
+  position:absolute;right:10px;font-size:12px;color:var(--sub);
+  pointer-events:none;
+}
+.b-shelf-dropdown{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;
+  background:#fff;border:1.5px solid var(--accent);border-radius:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:200;
+  max-height:220px;overflow-y:auto;display:none;
+}
+.b-shelf-dropdown.open{display:block;}
+.b-shelf-opt{
+  padding:11px 14px;font-size:13px;font-weight:700;color:var(--ink);
+  cursor:pointer;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.b-shelf-opt:last-child{border-bottom:none;}
+.b-shelf-opt:active,.b-shelf-opt.sel{background:var(--acc-bg);color:var(--accent);}
+.b-shelf-opt-days{font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;}
 .bulk-del-btn{
   width:34px;height:34px;border-radius:8px;border:1.5px solid var(--line);
   background:var(--bg);color:var(--sub);font-size:14px;cursor:pointer;
@@ -1282,6 +1307,17 @@ function renderPresets() {
         : p.label
     }</button>`;
   }).join('') + `<button class="preset-add-btn" onclick="addCustomPreset()">＋</button>`;
+  // 一括計算のプリセットボタンも同期更新
+  refreshBulkPresets();
+}
+
+function refreshBulkPresets() {
+  document.querySelectorAll('.bulk-row').forEach(row => {
+    const id = parseInt(row.id.replace('brow-',''));
+    const currentShelf = parseInt(row.querySelector('.b-shelf').value) || null;
+    const dd = row.querySelector('.b-shelf-dropdown');
+    if (dd) dd.innerHTML = buildBulkDropdownHTML(id, currentShelf);
+  });
 }
 
 function applyPreset(d) {
@@ -1388,6 +1424,47 @@ function switchTab(tab) {
 
 // ── 一括計算 ──
 let bulkRowCount = 0;
+function buildBulkDropdownHTML(rowId, selectedShelf) {
+  const presets = getAllPresets();
+  return presets.map(p =>
+    `<div class="b-shelf-opt${p.d===selectedShelf?' sel':''}" data-days="${p.d}" onclick="pickBulkPreset(${rowId},${p.d},this)">
+      <span>${p.label}</span>
+      <span class="b-shelf-opt-days">${p.d}日</span>
+    </div>`
+  ).join('');
+}
+
+function pickBulkPreset(rowId, days, optEl) {
+  const row = document.getElementById('brow-'+rowId);
+  if (!row) return;
+  row.querySelector('.b-shelf').value = days;
+  row.querySelectorAll('.b-shelf-opt').forEach(o => o.classList.remove('sel'));
+  optEl.classList.add('sel');
+  closeBulkDropdown(rowId);
+}
+
+function toggleBulkDropdown(rowId) {
+  const row = document.getElementById('brow-'+rowId);
+  if (!row) return;
+  const dd = row.querySelector('.b-shelf-dropdown');
+  const isOpen = dd.classList.contains('open');
+  // 他の全ドロップダウンを閉じる
+  document.querySelectorAll('.b-shelf-dropdown.open').forEach(d => d.classList.remove('open'));
+  if (!isOpen) {
+    // 選択中の日数でsel更新してから開く
+    const cur = parseInt(row.querySelector('.b-shelf').value);
+    row.querySelectorAll('.b-shelf-opt').forEach(o =>
+      o.classList.toggle('sel', parseInt(o.dataset.days) === cur)
+    );
+    dd.classList.add('open');
+  }
+}
+
+function closeBulkDropdown(rowId) {
+  const row = document.getElementById('brow-'+rowId);
+  if (row) row.querySelector('.b-shelf-dropdown').classList.remove('open');
+}
+
 function addBulkRow(expiry='', shelf='') {
   bulkRowCount++;
   const id = bulkRowCount;
@@ -1396,10 +1473,33 @@ function addBulkRow(expiry='', shelf='') {
   row.className = 'bulk-row'; row.id = 'brow-'+id;
   row.innerHTML = `
     <input type="date" class="b-exp" value="${expiry}" style="padding:11px 12px;font-size:14px">
-    <input type="number" class="b-shelf" value="${shelf}" placeholder="日数" min="1" style="padding:11px 12px;font-size:14px">
+    <div class="b-shelf-wrap">
+      <input type="number" class="b-shelf form-input" value="${shelf||''}" placeholder="日数 ▾" min="1"
+        style="padding:11px 14px;font-size:14px;padding-right:34px;cursor:pointer"
+        onclick="toggleBulkDropdown(${id})"
+        oninput="syncBulkShelfSel(${id})">
+      <span class="b-shelf-arrow">▾</span>
+      <div class="b-shelf-dropdown" id="bdrop-${id}">${buildBulkDropdownHTML(id, shelf||null)}</div>
+    </div>
     <button class="bulk-del-btn" onclick="document.getElementById('brow-${id}').remove()">✕</button>`;
   wrap.appendChild(row);
 }
+
+function syncBulkShelfSel(rowId) {
+  const row = document.getElementById('brow-'+rowId);
+  if (!row) return;
+  const cur = parseInt(row.querySelector('.b-shelf').value);
+  row.querySelectorAll('.b-shelf-opt').forEach(o =>
+    o.classList.toggle('sel', parseInt(o.dataset.days) === cur)
+  );
+}
+
+// ドロップダウン外クリックで閉じる
+document.addEventListener('click', e => {
+  if (!e.target.closest('.b-shelf-wrap')) {
+    document.querySelectorAll('.b-shelf-dropdown.open').forEach(d => d.classList.remove('open'));
+  }
+});
 addBulkRow(); addBulkRow(); addBulkRow();
 document.getElementById('bulk-add-btn').addEventListener('click', () => addBulkRow());
 document.getElementById('bulk-calc-btn').addEventListener('click', () => {
