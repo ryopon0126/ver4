@@ -347,13 +347,33 @@ input[type=date]:focus,input[type=number]:focus{
 .note{font-size:13px;color:var(--sub);padding:16px 0;text-align:center}
 
 /* 一括結果テーブル */
-.bulk-result-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
-.bulk-result-table th{
-  background:var(--bg);color:var(--sub);font-size:10px;font-weight:700;
-  letter-spacing:.06em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);
+.bulk-result-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.bulk-result-row{
+  background:#fff;border:1.5px solid var(--line);border-radius:14px;
+  padding:12px 14px;display:flex;align-items:center;gap:10px;
 }
-.bulk-result-table td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
-.bulk-result-table tr:last-child td{border-bottom:none}
+.bulk-result-row.registered{opacity:.55;}
+.bulk-result-num{
+  font-size:12px;font-weight:900;color:var(--sub);min-width:18px;text-align:center;
+}
+.bulk-result-body{flex:1;min-width:0;}
+.bulk-result-dates{
+  font-family:'DM Mono',monospace;font-size:12px;color:var(--sub);
+  display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:3px;
+}
+.bulk-result-shelf{font-size:11px;color:var(--sub)}
+.bulk-reg-btn{
+  flex-shrink:0;padding:8px 12px;border-radius:10px;
+  border:1.5px solid rgba(200,90,46,.3);background:var(--acc-bg);
+  color:var(--accent);font-size:12px;font-weight:700;
+  font-family:inherit;cursor:pointer;white-space:nowrap;
+  transition:background .12s,border-color .12s;
+}
+.bulk-reg-btn:active{background:#fde8df;}
+.bulk-reg-btn.done-reg{
+  border-color:rgba(22,163,74,.3);background:var(--grn-bg);
+  color:var(--green);cursor:default;
+}
 
 /* ═══════════════════════ BADGE ═══════════════════════ */
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
@@ -786,6 +806,35 @@ input[type=date]:focus,input[type=number]:focus{
   font-family:inherit;cursor:pointer;transition:border-color .12s,background .12s;
 }
 .debug-filter-btn.on{border-color:var(--accent);background:var(--acc-bg);color:var(--accent);}
+
+/* ── カスタム確認ダイアログ ── */
+.cfdlg-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+}
+.cfdlg-overlay.open{opacity:1;pointer-events:all;}
+.cfdlg-box{
+  background:#fff;border-radius:20px;width:100%;max-width:320px;
+  box-shadow:0 20px 60px rgba(0,0,0,.2);overflow:hidden;
+  transform:scale(.94) translateY(8px);
+  transition:transform .2s cubic-bezier(.32,0,.14,1);
+}
+.cfdlg-overlay.open .cfdlg-box{transform:scale(1) translateY(0);}
+.cfdlg-body{padding:24px 20px 16px;text-align:center;}
+.cfdlg-icon{font-size:32px;margin-bottom:8px;}
+.cfdlg-msg{font-size:14px;font-weight:700;color:var(--ink);line-height:1.6;}
+.cfdlg-sub{font-size:12px;color:var(--sub);margin-top:6px;line-height:1.5;}
+.cfdlg-btns{display:flex;border-top:1px solid var(--line);}
+.cfdlg-btn{
+  flex:1;padding:16px 8px;font-size:14px;font-weight:700;font-family:inherit;
+  background:none;border:none;cursor:pointer;transition:background .1s;
+}
+.cfdlg-btn:first-child{border-right:1px solid var(--line);color:var(--sub);}
+.cfdlg-btn:last-child{color:var(--accent);}
+.cfdlg-btn.danger{color:#DC2626;}
+.cfdlg-btn:active{background:var(--bg);}
 .debug-log-device{
   font-size:9px;color:var(--subtle);margin-top:1px;padding-left:2px;
 }
@@ -812,6 +861,21 @@ input[type=date]:focus,input[type=number]:focus{
 </div>
 
 <!-- BANNERS -->
+<!-- カスタム確認ダイアログ -->
+<div class="cfdlg-overlay" id="cfdlg-overlay">
+  <div class="cfdlg-box">
+    <div class="cfdlg-body">
+      <div class="cfdlg-icon" id="cfdlg-icon">⚠️</div>
+      <div class="cfdlg-msg"  id="cfdlg-msg"></div>
+      <div class="cfdlg-sub"  id="cfdlg-sub"></div>
+    </div>
+    <div class="cfdlg-btns">
+      <button class="cfdlg-btn" id="cfdlg-cancel">キャンセル</button>
+      <button class="cfdlg-btn" id="cfdlg-ok">実行</button>
+    </div>
+  </div>
+</div>
+
 <div class="sync-banner" id="sync-banner">
   <div class="sync-spinner"></div>
   <span id="sync-msg">同期中...</span>
@@ -819,7 +883,10 @@ input[type=date]:focus,input[type=number]:focus{
 <div class="alert-banner" id="alert-banner">
   <div class="alert-banner-hdr">
     <div class="alert-banner-title">⚠️ 在庫落とし日が近い商品があります</div>
-    <button class="alert-close-btn" onclick="document.getElementById('alert-banner').classList.remove('show')">✕</button>
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="alert-close-btn" id="alert-snooze-btn" onclick="snoozeAlertBanner()" style="font-size:10px;width:auto;padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap">今日は表示しない</button>
+      <button class="alert-close-btn" onclick="document.getElementById('alert-banner').classList.remove('show')">✕</button>
+    </div>
   </div>
   <div id="alert-banner-list"></div>
 </div>
@@ -946,6 +1013,9 @@ input[type=date]:focus,input[type=number]:focus{
           <div class="cal-month-label" id="cal-month-label"></div>
           <button class="cal-nav-btn" onclick="calMove(1)">›</button>
         </div>
+        <div style="text-align:center;margin-top:4px;margin-bottom:2px">
+          <button id="cal-today-btn" onclick="calGoToday()" style="font-size:11px;font-weight:700;color:var(--accent);background:var(--acc-bg);border:1.5px solid rgba(200,90,46,.2);border-radius:8px;padding:4px 12px;font-family:inherit;cursor:pointer;display:none">今月に戻る</button>
+        </div>
         <div class="cal-grid" id="cal-dow-row">
           <div class="cal-dow">日</div><div class="cal-dow">月</div>
           <div class="cal-dow">火</div><div class="cal-dow">水</div>
@@ -973,6 +1043,7 @@ input[type=date]:focus,input[type=number]:focus{
     <div class="filter-row">
       <button class="filter-btn on" id="list-filter-all"    onclick="setListFilter('all')">すべて</button>
       <button class="filter-btn"    id="list-filter-active" onclick="setListFilter('active')">未処理</button>
+      <button class="filter-btn"    id="sort-btn" onclick="cycleSort()" title="並び替え" style="flex:0 0 auto;padding:10px 12px;min-width:72px">↕ 日付順</button>
     </div>
     <div id="reg-list"></div>
 
@@ -1254,17 +1325,9 @@ input[type=date]:focus,input[type=number]:focus{
 
       <!-- 操作ログ -->
       <div id="debug-panel-log" style="padding:12px 16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span id="debug-fb-badge" style="font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;background:#F6F6FA;color:#6E6E82">⚡ ローカル</span>
-            <span id="debug-log-total" style="font-size:11px;font-weight:700;color:var(--sub)"></span>
-          </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span id="debug-log-total" style="font-size:11px;font-weight:700;color:var(--sub)"></span>
           <button onclick="clearDebugLog()" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit">🗑 消去</button>
-        </div>
-        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
-          <button class="debug-filter-btn on" id="dlog-f-all"    onclick="setDebugFilter('all')">すべて</button>
-          <button class="debug-filter-btn"    id="dlog-f-mine"   onclick="setDebugFilter('mine')">この端末</button>
-          <button class="debug-filter-btn"    id="dlog-f-others" onclick="setDebugFilter('others')">他の端末</button>
         </div>
         <div id="debug-log-list" style="font-family:'DM Mono',monospace;font-size:11px;line-height:1.8;max-height:46vh;overflow-y:auto"></div>
       </div>
@@ -1554,6 +1617,7 @@ function switchTab(tab) {
 }
 
 // ── 一括計算 ──
+const BULK_MAX_ROWS = 20;
 let bulkRowCount = 0;
 function buildBulkDropdownHTML(rowId, selectedShelf) {
   const presets = getAllPresets();
@@ -1597,6 +1661,8 @@ function closeBulkDropdown(rowId) {
 }
 
 function addBulkRow(expiry='', shelf='') {
+  const current = document.querySelectorAll('.bulk-row').length;
+  if (current >= BULK_MAX_ROWS) { showToast(`⚠️ 最大${BULK_MAX_ROWS}行までです`); return; }
   bulkRowCount++;
   const id = bulkRowCount;
   const wrap = document.getElementById('bulk-rows');
@@ -1659,25 +1725,28 @@ document.getElementById('bulk-calc-btn').addEventListener('click', () => {
   // 結果をグローバルに保持（登録ボタン用）
   window._bulkResults = results;
   const rows2 = results.map((r,i)=>`
-    <tr>
-      <td style="font-weight:700;text-align:center">${i+1}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px">${fmt(r.exp)}</td>
-      <td style="text-align:center;font-size:11px">${r.shelf}日</td>
-      <td style="font-family:'DM Mono',monospace;font-weight:700;font-size:11px">${fmt(r.rd)}</td>
-      <td><span class="badge ${r.cls}">${r.emoji} ${r.dtrN>=0?'残'+r.dtrN+'日':Math.abs(r.dtrN)+'日超過'}</span></td>
-      <td style="text-align:center"><button id="bulk-reg-btn-${i}" class="bulk-reg-btn" onclick="openBulkRegModal(${i})" style="padding:6px 10px;border-radius:8px;border:1.5px solid rgba(200,90,46,.3);background:var(--acc-bg);color:var(--accent);font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap">📌 登録</button></td>
-    </tr>`).join('');
+    <div class="bulk-result-row" id="bulk-result-row-${i}">
+      <span class="bulk-result-num">${i+1}</span>
+      <div class="bulk-result-body">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700">${fmt(r.rd)}</span>
+          <span class="badge ${r.cls}">${r.emoji} ${r.dtrN>=0?'残'+r.dtrN+'日':Math.abs(r.dtrN)+'日超過'}</span>
+        </div>
+        <div class="bulk-result-dates">
+          <span>賞味期限 ${fmt(r.exp)}</span>
+          <span class="bulk-result-shelf">基本 ${r.shelf}日</span>
+        </div>
+      </div>
+      <button id="bulk-reg-btn-${i}" class="bulk-reg-btn" onclick="openBulkRegModal(${i})">📌 登録</button>
+    </div>`).join('');
   document.getElementById('bulk-result-area').innerHTML = `
     <div class="card">
       <div class="card-body">
-        <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
           <button class="action-btn copy" onclick="copyBulk()">📋 コピー</button>
           <button class="action-btn share" onclick="shareBulk()">🔗 シェア</button>
         </div>
-        <table class="bulk-result-table">
-          <thead><tr><th>#</th><th>賞味期限</th><th style="text-align:center">基本</th><th>在庫落とし日</th><th>状態</th><th style="text-align:center">登録</th></tr></thead>
-          <tbody>${rows2}</tbody>
-        </table>
+        <div class="bulk-result-list">${rows2}</div>
       </div>
     </div>`;
 });
@@ -1720,11 +1789,28 @@ function getDeviceLabel() {
   return type + ' ' + getDeviceId();
 }
 
-// _allDebugLogs: Firebaseから取得した全ログキャッシュ
-let _db   = null; // Firebase database instance（デバッグログから参照するためここで宣言）
-let _allDebugLogs = [];
-let _debugFilter  = 'all';
-let _fbDebugLogEnabled = false; // Firebase debug_logs接続成功後にtrueになる
+let _db = null; // Firebase database instance
+
+// ── カスタム確認ダイアログ ──
+function customConfirm({ icon='⚠️', msg, sub='', okLabel='実行', okDanger=false, onOk }) {
+  const overlay = document.getElementById('cfdlg-overlay');
+  document.getElementById('cfdlg-icon').textContent = icon;
+  document.getElementById('cfdlg-msg').textContent  = msg;
+  document.getElementById('cfdlg-sub').textContent  = sub || '';
+  document.getElementById('cfdlg-sub').style.display = sub ? 'block' : 'none';
+  const okBtn = document.getElementById('cfdlg-ok');
+  okBtn.textContent = okLabel;
+  okBtn.className = 'cfdlg-btn' + (okDanger ? ' danger' : '');
+  overlay.classList.add('open');
+  const close = () => overlay.classList.remove('open');
+  const newOk  = okBtn.cloneNode(true);
+  const newCan = document.getElementById('cfdlg-cancel').cloneNode(true);
+  okBtn.parentNode.replaceChild(newOk, okBtn);
+  document.getElementById('cfdlg-cancel').parentNode.replaceChild(newCan, document.getElementById('cfdlg-cancel'));
+  newOk.addEventListener('click',  () => { close(); onOk && onOk(); });
+  newCan.addEventListener('click', () => close());
+  overlay.addEventListener('click', e => { if(e.target===overlay) close(); }, {once:true});
+}
 
 function _dbgLog(tag, msg) {
   const now = new Date();
@@ -1746,13 +1832,6 @@ function _dbgLog(tag, msg) {
     localStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(logs));
   } catch(e) {}
 
-  // ── Firebase書き込み（接続確立済みかつdebugLog有効時のみ） ──
-  if (_db && _fbDebugLogEnabled) {
-    try {
-      _db.ref('debug_logs/' + entry.id).set(entry).catch(()=>{});
-    } catch(e) {}
-  }
-
   // パネルが開いていれば即時反映（null安全）
   try {
     const overlay = document.getElementById('debug-overlay');
@@ -1760,91 +1839,30 @@ function _dbgLog(tag, msg) {
   } catch(e) {}
 }
 
-function setDebugFilter(f) {
-  _debugFilter = f;
-  ['all','mine','others'].forEach(k => {
-    document.getElementById('dlog-f-'+k).classList.toggle('on', k===f);
-  });
-  renderDebugLog();
-}
-
 function renderDebugLog() {
   const el = document.getElementById('debug-log-list');
   if (!el) return;
   try {
-    // Firebase接続中なら _allDebugLogs を使用、なければローカル
-    const myId = getDeviceId();
-    let logs = _db && _allDebugLogs.length
-      ? _allDebugLogs
-      : JSON.parse(localStorage.getItem(DEBUG_LOG_KEY) || '[]');
-
-    // フィルター
-    if (_debugFilter === 'mine')   logs = logs.filter(e => e.device === myId);
-    if (_debugFilter === 'others') logs = logs.filter(e => e.device && e.device !== myId);
-
-    // 件数バッジ
+    const logs = JSON.parse(localStorage.getItem(DEBUG_LOG_KEY) || '[]');
     const total = document.getElementById('debug-log-total');
     if (total) total.textContent = logs.length + '件';
-
     if (!logs.length) {
       el.innerHTML = '<div style="color:var(--sub);text-align:center;padding:24px 0">ログがありません</div>';
       return;
     }
-    const myDevice = getDeviceId();
-    el.innerHTML = logs.map(e => {
-      const isMe = !e.device || e.device === myDevice;
-      const deviceHtml = e.label
-        ? `<div class="debug-log-device">${isMe ? '🟢 ' : '🔵 '}${e.label}</div>` : '';
-      return `<div class="debug-log-row">
+    el.innerHTML = logs.map(e => `
+      <div class="debug-log-row">
         <span class="debug-log-time">${e.time}</span>
         <span class="debug-log-tag ${e.tag}">${e.tag.toUpperCase()}</span>
-        <div><span class="debug-log-msg">${e.msg}</span>${deviceHtml}</div>
-      </div>`;
-    }).join('');
+        <span class="debug-log-msg">${e.msg}</span>
+      </div>`).join('');
   } catch(err) {
     el.innerHTML = '<div style="color:red">ログ読み込みエラー</div>';
   }
 }
 
 // Firebase からデバッグログをリアルタイム受信
-function initFbDebugLog() {
-  if (!_db) return;
-  try {
-    // orderByChild を使わずシンプルに取得（インデックス不要）
-    _db.ref('debug_logs').limitToLast(DEBUG_LOG_MAX).on('value', snap => {
-      try {
-        const data = snap.val();
-        _allDebugLogs = data
-          ? Object.values(data).sort((a,b) => (b.ts||0) - (a.ts||0))
-          : [];
-        _fbDebugLogEnabled = true;
 
-        // Firebase接続バッジを更新
-        const badge = document.getElementById('debug-fb-badge');
-        if (badge) {
-          badge.textContent = '🔥 Firebase同期中';
-          badge.style.background = '#F5F3FF';
-          badge.style.color = '#7C3AED';
-        }
-        // パネルが開いていれば即時反映
-        const overlay = document.getElementById('debug-overlay');
-        if (overlay && overlay.classList.contains('open')) renderDebugLog();
-
-        // 200件超えたら古いものを自動削除
-        if (_allDebugLogs.length > DEBUG_LOG_MAX) {
-          const toDelete = _allDebugLogs.slice(DEBUG_LOG_MAX);
-          toDelete.forEach(e => { try { if(e.id) _db.ref('debug_logs/'+e.id).remove(); } catch(ex){} });
-        }
-      } catch(ex) { console.warn('debug_logs callback error:', ex); }
-    }, err => {
-      // PERMISSION_DENIEDなどのエラーは静かに無視（メインの動作に影響させない）
-      console.warn('debug_logs access denied. Add debug_logs rule to Firebase:', err.code);
-      _fbDebugLogEnabled = false;
-    });
-  } catch(e) {
-    console.warn('initFbDebugLog error:', e);
-  }
-}
 
 function renderDebugInfo() {
   const el = document.getElementById('debug-info-content');
@@ -1895,32 +1913,48 @@ function renderDebugDataCounts() {
 function debugDeleteRegs() {
   const regs = loadRegs();
   if (!regs.length) { showToast('登録データがありません'); return; }
-  if (!confirm(`ローカルの登録データ ${regs.length}件を削除しますか？\n（Firebase上のデータは残ります）`)) return;
-  localStorage.removeItem('cal_registrations_v1');
-  _regs = [];
-  updateSummary();
-  _dbgLog('sys', `[DEBUG] 登録データ全削除 ${regs.length}件`);
-  renderDebugDataCounts();
-  showToast('🗑 ローカル登録データを削除しました');
+  customConfirm({
+    icon: '🗑', msg: `ローカルの登録データ ${regs.length}件を削除しますか？`,
+    sub: 'Firebase上のデータは残ります。',
+    okLabel: '削除', okDanger: true,
+    onOk: () => {
+      localStorage.removeItem('cal_registrations_v1');
+      _regs = [];
+      updateSummary();
+      _dbgLog('sys', `[DEBUG] 登録データ全削除 ${regs.length}件`);
+      renderDebugDataCounts();
+      showToast('🗑 ローカル登録データを削除しました');
+    }
+  });
 }
 
 function debugDeleteLog() {
-  if (!confirm('操作ログを全て消去しますか？（FirebaseのログもすべてFirebase側でも削除します）')) return;
-  localStorage.removeItem(DEBUG_LOG_KEY);
-  if (_db) _db.ref('debug_logs').remove();
-  _allDebugLogs = [];
-  renderDebugDataCounts();
-  showToast('🗑 ログを消去しました');
+  customConfirm({
+    icon: '🗑', msg: '操作ログを全て消去しますか？',
+    okLabel: '消去', okDanger: true,
+    onOk: () => {
+      localStorage.removeItem(DEBUG_LOG_KEY);
+      renderDebugDataCounts();
+      showToast('🗑 ログを消去しました');
+    }
+  });
+  return; // onOk内で処理するため以降は実行しない
 }
 
 function debugDeleteAll() {
-  if (!confirm('⚠️ ローカルストレージの全データ（登録・ログ・設定）を削除しますか？\nこの操作は取り消せません。')) return;
-  const keys = Object.keys(localStorage).filter(k => k.startsWith('cal_') || k === DEBUG_LOG_KEY || k.startsWith('update_'));
-  keys.forEach(k => localStorage.removeItem(k));
-  _regs = [];
-  updateSummary();
-  renderDebugDataCounts();
-  showToast('🗑 全ローカルデータを削除しました');
+  customConfirm({
+    icon: '💣', msg: '全ローカルデータを削除しますか？',
+    sub: '登録・ログ・設定が全て消えます。この操作は取り消せません。',
+    okLabel: '全削除', okDanger: true,
+    onOk: () => {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('cal_') || k === DEBUG_LOG_KEY || k.startsWith('update_'));
+      keys.forEach(k => localStorage.removeItem(k));
+      _regs = [];
+      updateSummary();
+      renderDebugDataCounts();
+      showToast('🗑 全ローカルデータを削除しました');
+    }
+  });
 }
 
 // ── テストデータ生成 ──
@@ -1994,31 +2028,15 @@ function closeDebug() {
 }
 
 function clearDebugLog() {
-  const target = _debugFilter === 'mine'   ? 'この端末のログ' :
-                 _debugFilter === 'others' ? '他の端末のログ' : '全ログ';
-  if (!confirm(`${target}を消去しますか？`)) return;
-  const myId = getDeviceId();
-
-  // ローカル削除
-  if (_debugFilter === 'all' || _debugFilter === 'mine') {
-    localStorage.removeItem(DEBUG_LOG_KEY);
-  }
-
-  // Firebase削除
-  if (_db) {
-    if (_debugFilter === 'all') {
-      _db.ref('debug_logs').remove();
-    } else {
-      const targets = _allDebugLogs.filter(e =>
-        _debugFilter === 'mine'   ? e.device === myId :
-        _debugFilter === 'others' ? e.device !== myId : true
-      );
-      targets.forEach(e => { if(e.id) _db.ref('debug_logs/'+e.id).remove(); });
+  customConfirm({
+    icon: '🗑', msg: 'ログを全て消去しますか？',
+    okLabel: '消去', okDanger: true,
+    onOk: () => {
+      localStorage.removeItem(DEBUG_LOG_KEY);
+      renderDebugLog();
+      showToast('🗑 ログを消去しました');
     }
-  }
-  _allDebugLogs = [];
-  renderDebugLog();
-  showToast('🗑 ログを消去しました');
+  });
 }
 
 document.getElementById('debug-overlay').addEventListener('click', e => {
@@ -2157,8 +2175,7 @@ function initFirebase(cfg) {
           _dbgLog('fb', `Firebase同期完了: ${_regs.length}件`);
           showAlertBanner();
           showUpdatePopup();
-          setTimeout(initFbDebugLog, 500);
-        }
+          }
       }, err => {
         clearTimeout(syncTimeout);
         hideSync();
@@ -2223,7 +2240,7 @@ function confirmRegister() {
   // 一括計算のボタン更新
   if (_bulkRegIdx !== null) {
     const bb = document.getElementById('bulk-reg-btn-' + _bulkRegIdx);
-    if (bb) { bb.textContent='✅ 登録済'; bb.style.background='var(--grn-bg)'; bb.style.borderColor='rgba(22,163,74,.3)'; bb.style.color='var(--green)'; bb.disabled=true; }
+    if (bb) { bb.textContent='✅ 登録済'; bb.className='bulk-reg-btn done-reg'; bb.disabled=true; }
     _bulkRegIdx = null;
   }
   showToast('✅ 登録しました');
@@ -2236,6 +2253,11 @@ document.getElementById('modal-overlay').addEventListener('click', e=>{ if(e.tar
 // ── カレンダー ──
 let _calYear = new Date().getFullYear();
 let _calMonth = new Date().getMonth();
+function calGoToday() {
+  _calYear  = new Date().getFullYear();
+  _calMonth = new Date().getMonth();
+  renderCalendar();
+}
 function calMove(d) { _calMonth += d; if(_calMonth<0){_calMonth=11;_calYear--;} if(_calMonth>11){_calMonth=0;_calYear++;} renderCalendar(); }
 
 function renderCalendar() {
@@ -2266,6 +2288,12 @@ function renderCalendar() {
   const calGrid = document.getElementById('cal-grid');
   calGrid.innerHTML = html;
   window._calRdMap = rdMap;
+  // 今月ボタン：今月以外のときだけ表示
+  const todayBtn = document.getElementById('cal-today-btn');
+  if (todayBtn) {
+    const now = new Date();
+    todayBtn.style.display = (y !== now.getFullYear() || m !== now.getMonth()) ? 'inline-block' : 'none';
+  }
   calGrid.onclick = e => {
     const cell = e.target.closest('[data-cal]');
     if (!cell || !cell.classList.contains('has-items')) return;
@@ -2333,23 +2361,35 @@ function renderDetailList() {
   document.querySelectorAll('#detail-list .d-del-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       const id=Number(btn.dataset.id), name=btn.dataset.name||'未設定';
-      if(!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
-      deleteReg(id);
-      _detailItems=_detailItems.filter(r=>r.id!==id);
-      if(!_detailItems.length){closeDetail();return;}
-      renderDetailList();
+      customConfirm({
+        icon: '🗑', msg: `「${name}」を削除しますか？`,
+        sub: 'この操作は取り消せません。',
+        okLabel: '削除', okDanger: true,
+        onOk: () => {
+          deleteReg(id);
+          _detailItems=_detailItems.filter(r=>r.id!==id);
+          if(!_detailItems.length){closeDetail();return;}
+          renderDetailList();
+        }
+      });
     });
   });
   document.querySelectorAll('#detail-list .d-done-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       const id=Number(btn.dataset.id), isDone=btn.dataset.done==='1', name=btn.dataset.name||'未設定';
-      if(!confirm(isDone?`「${name}」を未処理に戻しますか？`:`「${name}」を在庫落とし済にしますか？`)) return;
+      customConfirm({
+        icon: isDone ? '↩️' : '✅',
+        msg: isDone ? `「${name}」を未処理に戻しますか？` : `「${name}」を在庫落とし済にしますか？`,
+        okLabel: isDone ? '未処理に戻す' : '処理済にする',
+        onOk: () => {
       const regs=loadRegs().map(r=>r.id===id?{...r,done:!isDone}:r);
       _dbgLog('done', `${isDone?'未処理に戻す':'処理済にする'}: ${name}`);
       saveRegs(regs);
       _detailItems=_detailItems.map(r=>r.id===id?{...r,done:!isDone}:r);
       renderDetailList();
       updateSummary();
+        }
+      });
     });
   });
   document.querySelectorAll('#detail-list .d-edit-btn').forEach(btn=>{
@@ -2367,7 +2407,31 @@ function closeDetail() {
 }
 
 // ── 登録一覧 ──
-let _listFilter='all';
+let _listFilter = 'all';
+let _listSort   = 'date'; // 'date' | 'company' | 'created'
+const SORT_LABELS = { date:'↕ 日付順', company:'↕ 会社名順', created:'↕ 登録順' };
+const SORT_CYCLE  = ['date','company','created'];
+
+function cycleSort() {
+  const idx = SORT_CYCLE.indexOf(_listSort);
+  _listSort = SORT_CYCLE[(idx + 1) % SORT_CYCLE.length];
+  const btn = document.getElementById('sort-btn');
+  if (btn) btn.textContent = SORT_LABELS[_listSort];
+  renderRegList(loadRegs());
+}
+
+function applySort(arr) {
+  const sorted = [...arr];
+  if (_listSort === 'company') {
+    sorted.sort((a,b) => (a.company||a.name||'').localeCompare(b.company||b.name||'', 'ja'));
+  } else if (_listSort === 'created') {
+    sorted.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+  } else {
+    sorted.sort((a,b) => new Date(a.rd) - new Date(b.rd));
+  }
+  return sorted;
+}
+
 function setListFilter(f) {
   _listFilter=f;
   ['all','active','done'].forEach(k=>{
@@ -2385,12 +2449,22 @@ function toggleDoneSection() {
   const wrap  = document.getElementById('done-list-wrap');
   const arrow = document.getElementById('done-arrow');
   if (_doneOpen) {
-    wrap.style.maxHeight = wrap.scrollHeight + 'px';
-    wrap.style.opacity   = '1';
+    // 一時的に auto にして実際の高さを計測してからアニメーション
+    wrap.style.transition = 'none';
+    wrap.style.maxHeight  = 'none';
+    const h = wrap.scrollHeight;
+    wrap.style.maxHeight  = '0';
+    wrap.offsetHeight; // reflow
+    wrap.style.transition = 'max-height .35s ease, opacity .25s';
+    wrap.style.maxHeight  = h + 'px';
+    wrap.style.opacity    = '1';
     arrow.style.transform = 'rotate(180deg)';
   } else {
-    wrap.style.maxHeight = '0';
-    wrap.style.opacity   = '0';
+    wrap.style.maxHeight  = wrap.scrollHeight + 'px';
+    wrap.offsetHeight;
+    wrap.style.transition = 'max-height .35s ease, opacity .25s';
+    wrap.style.maxHeight  = '0';
+    wrap.style.opacity    = '0';
     arrow.style.transform = 'rotate(0deg)';
   }
 }
@@ -2399,7 +2473,7 @@ function renderDoneList(done) {
   const el = document.getElementById('done-list');
   if (!el) return;
   if (!done.length) { el.innerHTML = ''; return; }
-  const sorted = [...done].sort((a,b)=>new Date(b.rd)-new Date(a.rd));
+  const sorted = applySort(done);
   el.innerHTML = sorted.map(r => {
     const cls = getStatusCls(r.rd), d = daysLeft(r.rd);
     const statusLabel = d<0?`${Math.abs(d)}日超過`:d===0?'本日':`残${d}日`;
@@ -2419,14 +2493,24 @@ function renderDoneList(done) {
       </div>
     </div>`;
   }).join('');
-  // 展開済みなら高さ再計算
+  // 展開済みなら高さ再計算（コンテンツ描画後に実行）
   if (_doneOpen) {
-    const wrap = document.getElementById('done-list-wrap');
-    wrap.style.maxHeight = wrap.scrollHeight + 'px';
+    requestAnimationFrame(() => {
+      const wrap = document.getElementById('done-list-wrap');
+      if (wrap) { wrap.style.transition='none'; wrap.style.maxHeight='none'; }
+    });
   }
 }
 
 function filterRegList() { renderRegList(loadRegs()); }
+
+// 検索ボックスにフォーカスしたとき、キーボード表示で隠れないよう スクロール
+const _searchInput = document.getElementById('reg-search');
+if (_searchInput) {
+  _searchInput.addEventListener('focus', () => {
+    setTimeout(() => _searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+  });
+}
 
 function renderRegList(regs) {
   const badge=document.getElementById('reg-count-badge');
@@ -2457,7 +2541,7 @@ function renderRegList(regs) {
     el.innerHTML=`<div class="empty-hint" style="padding:32px 0"><div class="empty-icon" style="font-size:36px">📭</div><div class="empty-text">${keyword?'該当する登録がありません':'未処理の登録はありません'}</div></div>`;
     return;
   }
-  const sorted=[...filtered].sort((a,b)=>new Date(a.rd)-new Date(b.rd));
+  const sorted = applySort(filtered);
   el.innerHTML=sorted.map(r=>{
     const cls=getStatusCls(r.rd), d=daysLeft(r.rd);
     const statusLabel=d<0?`${Math.abs(d)}日超過`:d===0?'本日':`残${d}日`;
@@ -2483,8 +2567,12 @@ function renderRegList(regs) {
 }
 
 function confirmDelete(id, name) {
-  if (!confirm(`「${name}」を削除しますか？\nこの操作は取り消せません。`)) return;
-  deleteReg(id);
+  customConfirm({
+    icon: '🗑', msg: `「${name}」を削除しますか？`,
+    sub: 'この操作は取り消せません。',
+    okLabel: '削除', okDanger: true,
+    onOk: () => deleteReg(id)
+  });
 }
 
 // ── Firebase設定UI ──
@@ -2541,10 +2629,15 @@ document.getElementById('btn-cfg-save').addEventListener('click', ()=>{
   saveFbConfig(cfg); initFirebase(cfg); closeFbSheet(); showToast('✅ Firebaseに接続しました');
 });
 document.getElementById('btn-cfg-clear').addEventListener('click', ()=>{
-  if(!confirm('Firebase設定を削除しますか？')) return;
-  clearFbConfig(); _db=null;
-  document.getElementById('fb-dot').style.background='rgba(255,255,255,.18)';
-  closeFbSheet(); showToast('Firebase設定を削除しました');
+  customConfirm({
+    icon: '🔥', msg: 'Firebase設定を削除しますか？',
+    okLabel: '削除', okDanger: true,
+    onOk: () => {
+      clearFbConfig(); _db=null;
+      document.getElementById('fb-dot').style.background='rgba(255,255,255,.18)';
+      closeFbSheet(); showToast('Firebase設定を削除しました');
+    }
+  });
 });
 document.getElementById('btn-settings').addEventListener('click', openFbSheet);
 document.getElementById('fb-sheet-overlay').addEventListener('click', e=>{
@@ -2760,7 +2853,15 @@ function showEditSuggest(val){
 function hideEditSuggest(){const el=document.getElementById('edit-company-suggest');if(el)el.style.display='none';}
 
 // ── 通知バナー ──
+function snoozeAlertBanner() {
+  const today = new Date().toDateString();
+  localStorage.setItem('alert_snooze_date', today);
+  document.getElementById('alert-banner').classList.remove('show');
+}
+
 function showAlertBanner(){
+  // 今日スヌーズ済みなら表示しない
+  if (localStorage.getItem('alert_snooze_date') === new Date().toDateString()) return;
   const regs=loadRegs();
   const urgent=regs.filter(r=>!r.done&&daysLeft(r.rd)<=30).sort((a,b)=>new Date(a.rd)-new Date(b.rd));
   if(!urgent.length) return;
