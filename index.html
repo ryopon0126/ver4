@@ -762,6 +762,23 @@ input[type=date]:focus,input[type=number]:focus{
 .debug-log-tag.fb{background:#F5F3FF;color:#7C3AED;}
 .debug-log-tag.sys{background:#F6F6FA;color:#6E6E82;}
 .debug-log-msg{color:var(--ink);word-break:break-all;}
+
+.debug-danger-btn{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-radius:12px;border:1.5px solid #FECACA;
+  background:#FEF2F2;color:#DC2626;font-size:13px;font-weight:700;
+  font-family:inherit;cursor:pointer;text-align:left;width:100%;
+  transition:opacity .12s;
+}
+.debug-danger-btn:active{opacity:.7;}
+.debug-action-btn{
+  display:flex;align-items:center;justify-content:flex-start;
+  padding:14px 16px;border-radius:12px;border:1.5px solid var(--line);
+  background:var(--bg);color:var(--ink);font-size:13px;font-weight:700;
+  font-family:inherit;cursor:pointer;text-align:left;width:100%;
+  transition:border-color .12s,background .12s;
+}
+.debug-action-btn:active{background:var(--acc-bg);border-color:var(--accent);}
 </style>
 </head>
 <body>
@@ -1218,18 +1235,57 @@ input[type=date]:focus,input[type=number]:focus{
     </div>
     <div class="modal-body" style="padding:0">
       <!-- タブ -->
-      <div style="display:flex;border-bottom:1px solid var(--line);padding:0 16px;gap:0">
-        <button class="debug-tab on" id="dtab-log" onclick="switchDebugTab('log')">📋 操作ログ</button>
-        <button class="debug-tab" id="dtab-info" onclick="switchDebugTab('info')">ℹ️ システム情報</button>
+      <div style="display:flex;border-bottom:1px solid var(--line);padding:0 12px;gap:0;overflow-x:auto">
+        <button class="debug-tab on" id="dtab-log"  onclick="switchDebugTab('log')">📋 ログ</button>
+        <button class="debug-tab"    id="dtab-data" onclick="switchDebugTab('data')">🗄 データ</button>
+        <button class="debug-tab"    id="dtab-test" onclick="switchDebugTab('test')">🧪 テスト</button>
+        <button class="debug-tab"    id="dtab-info" onclick="switchDebugTab('info')">ℹ️ 情報</button>
       </div>
+
       <!-- 操作ログ -->
       <div id="debug-panel-log" style="padding:12px 16px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
           <span style="font-size:11px;font-weight:700;color:var(--sub)">最新100件</span>
-          <button onclick="clearDebugLog()" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit">🗑 ログを消去</button>
+          <button onclick="clearDebugLog()" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit">🗑 消去</button>
         </div>
-        <div id="debug-log-list" style="font-family:'DM Mono',monospace;font-size:11px;line-height:1.8;max-height:55vh;overflow-y:auto"></div>
+        <div id="debug-log-list" style="font-family:'DM Mono',monospace;font-size:11px;line-height:1.8;max-height:52vh;overflow-y:auto"></div>
       </div>
+
+      <!-- データ管理 -->
+      <div id="debug-panel-data" style="padding:16px;display:none">
+        <p style="font-size:12px;color:var(--sub);margin-bottom:16px;line-height:1.6">ローカルストレージに保存されているデータを削除します。Firebase上のデータは残ります。</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onclick="debugDeleteRegs()" class="debug-danger-btn">
+            <span>📦 登録データを全削除</span>
+            <span id="debug-regs-count" style="font-size:11px;opacity:.7"></span>
+          </button>
+          <button onclick="debugDeleteLog()" class="debug-danger-btn" style="background:#FEF3C7;color:#92400E;border-color:#FDE68A">
+            <span>📋 操作ログを全削除</span>
+            <span id="debug-log-count" style="font-size:11px;opacity:.7"></span>
+          </button>
+          <button onclick="debugDeleteAll()" class="debug-danger-btn" style="background:#FEF2F2;color:#991B1B;border-color:#FECACA;font-weight:900">
+            <span>⚠️ ローカル全データを削除</span>
+            <span style="font-size:11px;opacity:.7">設定・ログ・登録データ</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- テストデータ -->
+      <div id="debug-panel-test" style="padding:16px;display:none">
+        <p style="font-size:12px;color:var(--sub);margin-bottom:14px;line-height:1.6">各ステータスのテスト用ダミーデータを生成します。既存データに追加されます。</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onclick="debugGenTest('all')" class="debug-action-btn">🎲 全パターンを生成（12件）</button>
+          <button onclick="debugGenTest('urgent')" class="debug-action-btn" style="border-color:rgba(232,52,26,.3);color:var(--accent)">⚠️ 期限切れ・1ヶ月以内のみ（6件）</button>
+          <button onclick="debugGenTest('safe')" class="debug-action-btn" style="border-color:rgba(22,163,74,.3);color:#16A34A">✅ 余裕あり・処理済みのみ（6件）</button>
+          <div style="height:1px;background:var(--line);margin:4px 0"></div>
+          <button onclick="debugDeleteTestData()" class="debug-danger-btn">
+            <span>🧹 テストデータのみ削除</span>
+            <span id="debug-test-count" style="font-size:11px;opacity:.7"></span>
+          </button>
+        </div>
+        <div id="debug-gen-result" style="margin-top:14px;font-size:12px;color:var(--sub)"></div>
+      </div>
+
       <!-- システム情報 -->
       <div id="debug-panel-info" style="padding:12px 16px;display:none">
         <div id="debug-info-content" style="font-family:'DM Mono',monospace;font-size:11px;line-height:2"></div>
@@ -1689,12 +1745,115 @@ function renderDebugInfo() {
 }
 
 function switchDebugTab(tab) {
-  document.getElementById('debug-panel-log').style.display  = tab==='log'  ? 'block' : 'none';
-  document.getElementById('debug-panel-info').style.display = tab==='info' ? 'block' : 'none';
-  document.getElementById('dtab-log').classList.toggle('on',  tab==='log');
-  document.getElementById('dtab-info').classList.toggle('on', tab==='info');
+  ['log','data','test','info'].forEach(t => {
+    document.getElementById('debug-panel-'+t).style.display = tab===t ? 'block' : 'none';
+    document.getElementById('dtab-'+t).classList.toggle('on', tab===t);
+  });
   if (tab==='log')  renderDebugLog();
   if (tab==='info') renderDebugInfo();
+  if (tab==='data') renderDebugDataCounts();
+  if (tab==='test') refreshDebugTestCount();
+}
+
+function renderDebugDataCounts() {
+  const regs = loadRegs();
+  const logLen = JSON.parse(localStorage.getItem(DEBUG_LOG_KEY)||'[]').length;
+  const el = document.getElementById('debug-regs-count');
+  const el2 = document.getElementById('debug-log-count');
+  if (el)  el.textContent  = regs.length + '件';
+  if (el2) el2.textContent = logLen + '件';
+}
+
+// ── データ削除 ──
+function debugDeleteRegs() {
+  const regs = loadRegs();
+  if (!regs.length) { showToast('登録データがありません'); return; }
+  if (!confirm(`ローカルの登録データ ${regs.length}件を削除しますか？\n（Firebase上のデータは残ります）`)) return;
+  localStorage.removeItem('cal_registrations_v1');
+  _regs = [];
+  updateSummary();
+  _dbgLog('sys', `[DEBUG] 登録データ全削除 ${regs.length}件`);
+  renderDebugDataCounts();
+  showToast('🗑 ローカル登録データを削除しました');
+}
+
+function debugDeleteLog() {
+  if (!confirm('操作ログを全て消去しますか？')) return;
+  localStorage.removeItem(DEBUG_LOG_KEY);
+  _dbgLog('sys', '[DEBUG] 操作ログを消去');
+  renderDebugDataCounts();
+  showToast('🗑 ログを消去しました');
+}
+
+function debugDeleteAll() {
+  if (!confirm('⚠️ ローカルストレージの全データ（登録・ログ・設定）を削除しますか？\nこの操作は取り消せません。')) return;
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('cal_') || k === DEBUG_LOG_KEY || k.startsWith('update_'));
+  keys.forEach(k => localStorage.removeItem(k));
+  _regs = [];
+  updateSummary();
+  renderDebugDataCounts();
+  showToast('🗑 全ローカルデータを削除しました');
+}
+
+// ── テストデータ生成 ──
+function debugGenTest(mode) {
+  const today = new Date();
+  const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate()+n); return r.toISOString().slice(0,10); };
+  const makeReg = (company, partno, expiryOffset, shelfDays, done=false) => {
+    const expiry = addDays(today, expiryOffset);
+    const rd = removalDate(expiry, shelfDays);
+    const id = Date.now() + Math.floor(Math.random()*10000);
+    return { id, company, partno, expiry, shelf: shelfDays, rd, done, createdAt: new Date().toISOString(), _test: true };
+  };
+
+  const allPatterns = [
+    makeReg('テスト商品A', 'TS-001', -10,  90),   // 超過済み
+    makeReg('テスト商品B', 'TS-002',  20,  60),   // 残わずか
+    makeReg('テスト商品C', 'TS-003',  45,  90),   // 1ヶ月以内
+    makeReg('テスト商品D', 'TS-004',  80, 180),   // 余裕あり
+    makeReg('テスト商品E', 'TS-005', 200, 365),   // 余裕あり（長期）
+    makeReg('テスト商品F', 'TS-006', 100, 180, true),  // 処理済み
+    makeReg('テスト商品G', 'TS-007',  15,  30),   // 残わずか
+    makeReg('テスト商品H', 'TS-008', -30, 120),   // 大幅超過
+    makeReg('テスト商品I', 'TS-009', 120, 240),   // 余裕あり
+    makeReg('テスト商品J', 'TS-010',  60, 120),   // 普通
+    makeReg('テスト商品K', 'TS-011', 300, 365, true),  // 処理済み（長期）
+    makeReg('テスト商品L', 'TS-012',  90, 180, true),  // 処理済み
+  ];
+  const urgentPatterns = allPatterns.filter(r => !r.done && daysLeft(r.rd) <= 30);
+  const safePatterns   = allPatterns.filter(r => r.done || daysLeft(r.rd) > 30);
+
+  const targets = mode==='urgent' ? urgentPatterns : mode==='safe' ? safePatterns : allPatterns;
+  const regs = loadRegs();
+  targets.forEach(r => regs.push(r));
+  saveRegs(regs);
+  _dbgLog('sys', `[DEBUG] テストデータ生成: ${targets.length}件 (${mode})`);
+  const el = document.getElementById('debug-gen-result');
+  if (el) el.innerHTML = `✅ ${targets.length}件を追加しました<br><span style="color:var(--sub)">${targets.map(r=>r.partno).join(' / ')}</span>`;
+  updateSummary();
+  refreshDebugTestCount();
+  showToast(`🧪 テストデータ ${targets.length}件を追加しました`);
+}
+
+function refreshDebugTestCount() {
+  const count = loadRegs().filter(r => r._test).length;
+  const el = document.getElementById('debug-test-count');
+  if (el) el.textContent = count ? count + '件' : 'なし';
+}
+
+function debugDeleteTestData() {
+  const regs = loadRegs();
+  const testRegs = regs.filter(r => r._test);
+  if (!testRegs.length) { showToast('テストデータがありません'); return; }
+  if (!confirm(`テストデータ ${testRegs.length}件を削除しますか？`)) return;
+  const filtered = regs.filter(r => !r._test);
+  saveRegs(filtered);
+  _dbgLog('sys', `[DEBUG] テストデータ削除: ${testRegs.length}件`);
+  refreshDebugTestCount();
+  const el = document.getElementById('debug-gen-result');
+  if (el) el.innerHTML = `🗑 テストデータ ${testRegs.length}件を削除しました`;
+  updateSummary();
+  showToast(`🧹 テストデータ ${testRegs.length}件を削除しました`);
 }
 
 function openDebug() {
@@ -2621,6 +2780,23 @@ function doExportPDF(mode){
 .debug-log-tag.fb{background:#F5F3FF;color:#7C3AED;}
 .debug-log-tag.sys{background:#F6F6FA;color:#6E6E82;}
 .debug-log-msg{color:var(--ink);word-break:break-all;}
+
+.debug-danger-btn{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-radius:12px;border:1.5px solid #FECACA;
+  background:#FEF2F2;color:#DC2626;font-size:13px;font-weight:700;
+  font-family:inherit;cursor:pointer;text-align:left;width:100%;
+  transition:opacity .12s;
+}
+.debug-danger-btn:active{opacity:.7;}
+.debug-action-btn{
+  display:flex;align-items:center;justify-content:flex-start;
+  padding:14px 16px;border-radius:12px;border:1.5px solid var(--line);
+  background:var(--bg);color:var(--ink);font-size:13px;font-weight:700;
+  font-family:inherit;cursor:pointer;text-align:left;width:100%;
+  transition:border-color .12s,background .12s;
+}
+.debug-action-btn:active{background:var(--acc-bg);border-color:var(--accent);}
 </style></head><body>
 <div class="pbtn"><button class="p" onclick="window.print()">🖨️ PDFとして保存</button><button class="c" onclick="window.close()">✕ 閉じる</button></div>
 <div class="hdr"><div><div class="hdr-title">在庫落とし日一覧</div><div style="font-size:9pt;opacity:.85;margin-top:2px">1/3ルール 賞味期限チェック計算機 ver.2.0</div></div><div class="hdr-meta">出力日：${dateLabel}<br>対象：${filterLabel}　件数：${filtered.length}件</div></div>
