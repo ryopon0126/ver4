@@ -2122,36 +2122,63 @@ function saveFbConfig(c){ localStorage.setItem(FB_CFG_KEY, JSON.stringify(c)); }
 function clearFbConfig(){ localStorage.removeItem(FB_CFG_KEY); }
 
 function initFirebase(cfg) {
-  try {
-    if (firebase.apps.length) firebase.apps.forEach(a=>a.delete());
-    const app = firebase.initializeApp(cfg);
-    _db = firebase.database(app);
-    _dbgLog('fb', `Firebase接続: ${cfg.databaseURL||''}`);
-    showSync('Firebaseからデータ取得中...');
-    let _fbFirstLoad = true;
-    _db.ref('registrations').on('value', snap => {
-      const data = snap.val();
-      _regs = data ? Object.values(data) : [];
-      localSaveRegs(_regs);
+  // 既存アプリを削除してから再初期化（非同期を待つ）
+  const prevApps = [...firebase.apps];
+  const deleteAll = prevApps.length
+    ? Promise.all(prevApps.map(a => a.delete()))
+    : Promise.resolve();
+
+  showSync('Firebaseからデータ取得中...');
+
+  // タイムアウト保険：10秒経っても応答がなければ隠す
+  const syncTimeout = setTimeout(() => {
+    hideSync();
+    showToast('⚠️ Firebase接続がタイムアウトしました');
+    _dbgLog('fb', 'Firebase接続タイムアウト');
+  }, 10000);
+
+  deleteAll.then(() => {
+    try {
+      const app = firebase.initializeApp(cfg);
+      _db = firebase.database(app);
+      _dbgLog('fb', `Firebase接続: ${cfg.databaseURL||''}`);
+      let _fbFirstLoad = true;
+      _db.ref('registrations').on('value', snap => {
+        clearTimeout(syncTimeout);
+        const data = snap.val();
+        _regs = data ? Object.values(data) : [];
+        localSaveRegs(_regs);
+        hideSync();
+        if (document.getElementById('panel-cal') && document.getElementById('panel-cal').style.display !== 'none') renderCalendar();
+        if (document.getElementById('panel-list') && document.getElementById('panel-list').style.display !== 'none') renderRegList(_regs);
+        updateSummary();
+        if (_fbFirstLoad) {
+          _fbFirstLoad = false;
+          _dbgLog('fb', `Firebase同期完了: ${_regs.length}件`);
+          showAlertBanner();
+          showUpdatePopup();
+          setTimeout(initFbDebugLog, 500);
+        }
+      }, err => {
+        clearTimeout(syncTimeout);
+        hideSync();
+        _dbgLog('fb', `Firebase接続エラー: ${err.code||err.message}`);
+        console.error(err);
+      });
+      _db.ref('.info/connected').on('value', snap => {
+        const dot = document.getElementById('fb-dot');
+        if (dot) dot.style.background = snap.val() ? '#4ADE80' : 'rgba(255,255,255,.2)';
+      });
+    } catch(e) {
+      clearTimeout(syncTimeout);
       hideSync();
-      if (document.getElementById('panel-cal') && document.getElementById('panel-cal').style.display !== 'none') renderCalendar();
-      if (document.getElementById('panel-list') && document.getElementById('panel-list').style.display !== 'none') renderRegList(_regs);
-      updateSummary();
-      // アラート・アップデート通知は初回ロード時のみ
-      if (_fbFirstLoad) {
-        _fbFirstLoad = false;
-        _dbgLog('fb', `Firebase同期完了: ${_regs.length}件`);
-        showAlertBanner();
-        showUpdatePopup();
-        // 登録データ取得後にdebugLogを初期化（遅延してメインに影響しないようにする）
-        setTimeout(initFbDebugLog, 500);
-      }
-    }, err => { hideSync(); console.error(err); });
-    _db.ref('.info/connected').on('value', snap => {
-      const dot = document.getElementById('fb-dot');
-      if (dot) dot.style.background = snap.val() ? '#4ADE80' : 'rgba(255,255,255,.2)';
-    });
-  } catch(e) { console.error('Firebase init error:', e); }
+      console.error('Firebase init error:', e);
+    }
+  }).catch(e => {
+    clearTimeout(syncTimeout);
+    hideSync();
+    console.error('Firebase delete error:', e);
+  });
 }
 
 function deleteReg(id) {
