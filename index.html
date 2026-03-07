@@ -1539,6 +1539,7 @@ function initFirebase(cfg) {
     const app = firebase.initializeApp(cfg);
     _db = firebase.database(app);
     showSync('Firebaseからデータ取得中...');
+    let _fbFirstLoad = true;
     _db.ref('registrations').on('value', snap => {
       const data = snap.val();
       _regs = data ? Object.values(data) : [];
@@ -1547,8 +1548,12 @@ function initFirebase(cfg) {
       if (document.getElementById('panel-cal') && document.getElementById('panel-cal').style.display !== 'none') renderCalendar();
       if (document.getElementById('panel-list') && document.getElementById('panel-list').style.display !== 'none') renderRegList(_regs);
       updateSummary();
-      showAlertBanner();
-      showUpdatePopup();
+      // アラート・アップデート通知は初回ロード時のみ
+      if (_fbFirstLoad) {
+        _fbFirstLoad = false;
+        showAlertBanner();
+        showUpdatePopup();
+      }
     }, err => { hideSync(); console.error(err); });
     _db.ref('.info/connected').on('value', snap => {
       const dot = document.getElementById('fb-dot');
