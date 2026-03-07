@@ -1186,6 +1186,16 @@ input[type=date]:focus,input[type=number]:focus{
           <span style="font-size:10px;color:var(--sub)">該当件数</span>
         </div>
       </button>
+      <button onclick="doExportPDF('done')" style="display:flex;align-items:center;justify-content:space-between;padding:18px;border-radius:16px;border:2px solid rgba(22,163,74,.2);background:#F0FDF4;cursor:pointer;font-family:inherit;text-align:left;width:100%;transition:border-color .15s" onmouseover="this.style.borderColor='#16A34A'" onmouseout="this.style.borderColor='rgba(22,163,74,.2)'">
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#16A34A;margin-bottom:3px">✅ 処理済みのみ</div>
+          <div style="font-size:12px;color:var(--sub)">在庫落とし済みとしてマークした商品</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <span id="pdf-done-count" style="font-size:20px;font-weight:900;color:#16A34A">0件</span>
+          <span style="font-size:10px;color:var(--sub)">処理済件数</span>
+        </div>
+      </button>
     </div>
     <div class="modal-ftr">
       <button class="modal-cancel" style="width:100%" onclick="closePdfModal()">キャンセル</button>
@@ -2199,8 +2209,10 @@ function exportPDF(){
   if(!regs.length){showToast('⚠️ 登録済みのデータがありません');return;}
   // 1ヶ月以内の件数を事前カウントしてバッジ表示
   const urgentCount=regs.filter(r=>!r.done&&daysLeft(r.rd)<=30).length;
+  const doneCount=regs.filter(r=>r.done).length;
   document.getElementById('pdf-all-count').textContent=regs.length+'件';
   document.getElementById('pdf-urgent-count').textContent=urgentCount+'件';
+  document.getElementById('pdf-done-count').textContent=doneCount+'件';
   document.getElementById('pdf-overlay').classList.add('open');
 }
 
@@ -2216,6 +2228,9 @@ function doExportPDF(mode){
   if(mode==='urgent'){
     filtered=filtered.filter(r=>!r.done&&daysLeft(r.rd)<=30);
     filterLabel='1ヶ月以内（未処理）';
+  } else if(mode==='done'){
+    filtered=filtered.filter(r=>r.done);
+    filterLabel='処理済みのみ';
   } else {
     filterLabel='すべて';
   }
@@ -2223,7 +2238,7 @@ function doExportPDF(mode){
   filtered.sort((a,b)=>new Date(a.rd)-new Date(b.rd));
   const now=new Date();
   const dateLabel=`${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')}`;
-  const accentColor = mode==='urgent' ? '#E8341A' : '#C85A2E';
+  const accentColor = mode==='urgent' ? '#E8341A' : mode==='done' ? '#16A34A' : '#C85A2E';
   const rows=filtered.map((r,i)=>{
     const d=daysLeft(r.rd);
     const sl=d<0?`<span style="color:#7C3AED;font-weight:700">${Math.abs(d)}日超過</span>`:d===0?`<span style="color:#E8341A;font-weight:700">本日</span>`:d<=30?`<span style="color:#E8341A;font-weight:700">残${d}日</span>`:`<span style="color:#16A34A;font-weight:700">残${d}日</span>`;
