@@ -2578,18 +2578,6 @@ document.getElementById('btn-cfg-url').addEventListener('click', ()=>{
 function copyUrlFallback(url){
   navigator.clipboard.writeText(url).then(()=>showToast('🔗 接続用URLをコピーしました')).catch(()=>showToast('⚠️ コピーに失敗しました'));
 }
-(function checkUrlCfg(){
-  const p=new URLSearchParams(location.search).get('fbcfg');
-  if(!p) return;
-  try{
-    const cfg=JSON.parse(atob(p));
-    if(cfg&&cfg.apiKey&&cfg.databaseURL){
-      saveFbConfig(cfg); initFirebase(cfg);
-      history.replaceState({},'',location.pathname);
-      setTimeout(()=>showToast('✅ FirebaseにURLから自動接続しました'),1000);
-    }
-  }catch(e){}
-})();
 
 // ── トースト ──
 function showToast(msg) {
@@ -2976,14 +2964,34 @@ document.getElementById('pdf-overlay').addEventListener('click',e=>{
   _regs=localLoadRegs();
   updateSummary();
   renderCalendar();
-  const cfg=loadFbConfig();
-  if(cfg&&cfg.apiKey&&cfg.databaseURL){
-    initFirebase(cfg);
-  } else {
-    setTimeout(showAlertBanner, 500);
+
+  // URLパラメータのFB設定を最優先でチェック
+  let urlCfgFound = false;
+  try {
+    const p = new URLSearchParams(location.search).get('fbcfg');
+    if (p) {
+      const cfg = JSON.parse(atob(p));
+      if (cfg && cfg.apiKey && cfg.databaseURL) {
+        saveFbConfig(cfg);
+        initFirebase(cfg);
+        history.replaceState({}, '', location.pathname);
+        setTimeout(() => showToast('✅ FirebaseにURLから自動接続しました'), 800);
+        urlCfgFound = true;
+      }
+    }
+  } catch(e) {}
+
+  // URL設定がなければ保存済み設定を使用
+  if (!urlCfgFound) {
+    const cfg = loadFbConfig();
+    if (cfg && cfg.apiKey && cfg.databaseURL) {
+      initFirebase(cfg);
+    } else {
+      setTimeout(showAlertBanner, 500);
+    }
   }
+
   showUpdatePopup();
 })();
-(function checkUrlCfgOnLoad(){})(); // checkUrlCfg is already called above via IIFE
 </script>
 </body>
