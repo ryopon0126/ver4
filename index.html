@@ -738,6 +738,30 @@ input[type=date]:focus,input[type=number]:focus{
   border: none; padding: 0; background: none; border-radius: 4px;
 }
 
+
+/* ── デバッグモーダル ── */
+.debug-tab{
+  padding:11px 14px;font-size:12px;font-weight:700;font-family:inherit;
+  background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--sub);cursor:pointer;transition:color .15s;
+}
+.debug-tab.on{color:var(--accent);border-bottom-color:var(--accent);}
+.debug-log-row{
+  padding:4px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:flex-start;
+}
+.debug-log-row:last-child{border-bottom:none;}
+.debug-log-time{color:var(--sub);font-size:10px;white-space:nowrap;flex-shrink:0;padding-top:1px;}
+.debug-log-tag{
+  font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;
+  white-space:nowrap;flex-shrink:0;
+}
+.debug-log-tag.reg{background:#FEF1EE;color:#C85A2E;}
+.debug-log-tag.edit{background:#EFF6FF;color:#2563EB;}
+.debug-log-tag.del{background:#FEF2F2;color:#DC2626;}
+.debug-log-tag.done{background:#F0FDF4;color:#16A34A;}
+.debug-log-tag.fb{background:#F5F3FF;color:#7C3AED;}
+.debug-log-tag.sys{background:#F6F6FA;color:#6E6E82;}
+.debug-log-msg{color:var(--ink);word-break:break-all;}
 </style>
 </head>
 <body>
@@ -747,7 +771,7 @@ input[type=date]:focus,input[type=number]:focus{
 
 <div class="topbar">
   <div class="tb-brand">
-    <div class="tb-mark">⅓</div>
+    <div class="tb-mark" id="tb-mark-logo">⅓</div>
     <div class="tb-text">
       <div class="tb-name">賞味期限チェック計算機</div>
       <div class="tb-ver">ver.2.0</div>
@@ -1181,6 +1205,39 @@ input[type=date]:focus,input[type=number]:focus{
   </div>
 </div>
 
+<!-- ══ デバッグモーダル ══ -->
+<div class="modal-overlay" id="debug-overlay">
+  <div class="modal-sheet" style="max-height:90vh">
+    <div class="modal-handle"></div>
+    <div class="modal-hdr">
+      <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+        🛠️ デバッグモード
+        <span style="font-size:10px;background:#7C3AED;color:#fff;padding:2px 8px;border-radius:20px;font-weight:700">DEV</span>
+      </div>
+      <button class="modal-close" onclick="closeDebug()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0">
+      <!-- タブ -->
+      <div style="display:flex;border-bottom:1px solid var(--line);padding:0 16px;gap:0">
+        <button class="debug-tab on" id="dtab-log" onclick="switchDebugTab('log')">📋 操作ログ</button>
+        <button class="debug-tab" id="dtab-info" onclick="switchDebugTab('info')">ℹ️ システム情報</button>
+      </div>
+      <!-- 操作ログ -->
+      <div id="debug-panel-log" style="padding:12px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;font-weight:700;color:var(--sub)">最新100件</span>
+          <button onclick="clearDebugLog()" style="font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit">🗑 ログを消去</button>
+        </div>
+        <div id="debug-log-list" style="font-family:'DM Mono',monospace;font-size:11px;line-height:1.8;max-height:55vh;overflow-y:auto"></div>
+      </div>
+      <!-- システム情報 -->
+      <div id="debug-panel-info" style="padding:12px 16px;display:none">
+        <div id="debug-info-content" style="font-family:'DM Mono',monospace;font-size:11px;line-height:2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ PDF出力選択モーダル ══ -->
 <div class="modal-overlay" id="pdf-overlay">
   <div class="modal-sheet" style="max-height:70vh">
@@ -1564,6 +1621,119 @@ document.getElementById('howto-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('howto-overlay')) closeHowtoSheet();
 });
 
+// ════════════════════════════════════
+// ── デバッグモード ──
+// ════════════════════════════════════
+const DEBUG_LOG_KEY = 'debug_log_v1';
+const DEBUG_LOG_MAX = 100;
+
+function _dbgLog(tag, msg) {
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const entry = { time, tag, msg };
+  try {
+    const logs = JSON.parse(localStorage.getItem(DEBUG_LOG_KEY) || '[]');
+    logs.unshift(entry);
+    if (logs.length > DEBUG_LOG_MAX) logs.length = DEBUG_LOG_MAX;
+    localStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(logs));
+  } catch(e) {}
+  // デバッグパネルが開いていれば即時反映
+  if (document.getElementById('debug-overlay').classList.contains('open')) {
+    renderDebugLog();
+  }
+}
+
+function renderDebugLog() {
+  const el = document.getElementById('debug-log-list');
+  if (!el) return;
+  try {
+    const logs = JSON.parse(localStorage.getItem(DEBUG_LOG_KEY) || '[]');
+    if (!logs.length) {
+      el.innerHTML = '<div style="color:var(--sub);text-align:center;padding:24px 0">ログがありません</div>';
+      return;
+    }
+    el.innerHTML = logs.map(e => `
+      <div class="debug-log-row">
+        <span class="debug-log-time">${e.time}</span>
+        <span class="debug-log-tag ${e.tag}">${e.tag.toUpperCase()}</span>
+        <span class="debug-log-msg">${e.msg}</span>
+      </div>`).join('');
+  } catch(err) {
+    el.innerHTML = '<div style="color:red">ログ読み込みエラー</div>';
+  }
+}
+
+function renderDebugInfo() {
+  const el = document.getElementById('debug-info-content');
+  if (!el) return;
+  const regs = loadRegs();
+  const cfg = loadFbConfig();
+  const logSize = (localStorage.getItem(DEBUG_LOG_KEY)||'').length;
+  const regsSize = (localStorage.getItem('cal_registrations_v1')||'').length;
+  const lines = [
+    ['アプリ', 'ver.2.0'],
+    ['登録件数', `${regs.length}件（未処理:${regs.filter(r=>!r.done).length} / 処理済:${regs.filter(r=>r.done).length}）`],
+    ['データサイズ', `${(regsSize/1024).toFixed(1)} KB`],
+    ['ログサイズ', `${(logSize/1024).toFixed(1)} KB`],
+    ['Firebase', cfg && cfg.databaseURL ? `接続済 (${cfg.databaseURL.replace('https://','').replace('.firebaseio.com','')})` : '未接続'],
+    ['_db状態', _db ? '初期化済' : '未初期化'],
+    ['UA', navigator.userAgent.slice(0,60)+'...'],
+    ['画面', `${window.innerWidth}×${window.innerHeight}`],
+  ];
+  el.innerHTML = lines.map(([k,v]) =>
+    `<div style="display:flex;gap:12px;padding:4px 0;border-bottom:1px solid var(--line)">
+      <span style="color:var(--sub);min-width:100px;flex-shrink:0">${k}</span>
+      <span style="color:var(--ink);word-break:break-all">${v}</span>
+    </div>`
+  ).join('');
+}
+
+function switchDebugTab(tab) {
+  document.getElementById('debug-panel-log').style.display  = tab==='log'  ? 'block' : 'none';
+  document.getElementById('debug-panel-info').style.display = tab==='info' ? 'block' : 'none';
+  document.getElementById('dtab-log').classList.toggle('on',  tab==='log');
+  document.getElementById('dtab-info').classList.toggle('on', tab==='info');
+  if (tab==='log')  renderDebugLog();
+  if (tab==='info') renderDebugInfo();
+}
+
+function openDebug() {
+  document.getElementById('debug-overlay').classList.add('open');
+  renderDebugLog();
+}
+
+function closeDebug() {
+  document.getElementById('debug-overlay').classList.remove('open');
+}
+
+function clearDebugLog() {
+  if (!confirm('ログを全て消去しますか？')) return;
+  localStorage.removeItem(DEBUG_LOG_KEY);
+  renderDebugLog();
+}
+
+document.getElementById('debug-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('debug-overlay')) closeDebug();
+});
+
+// ── ヘッダーロゴ5回タップでデバッグモード起動 ──
+let _logoTapCount = 0, _logoTapTimer = null;
+document.getElementById('tb-mark-logo').addEventListener('click', () => {
+  _logoTapCount++;
+  clearTimeout(_logoTapTimer);
+  if (_logoTapCount >= 5) {
+    _logoTapCount = 0;
+    showToast('🛠️ デバッグモード');
+    setTimeout(openDebug, 300);
+  } else {
+    _logoTapTimer = setTimeout(() => { _logoTapCount = 0; }, 1500);
+  }
+});
+
+// ── ログ初期化メッセージ ──
+_dbgLog('sys', 'アプリ起動 ver.2.0');
+
+
 
 // ── アップデート通知ポップアップ ──
 const UPDATE_VER_KEY = 'update_seen_v2.0';
@@ -1648,6 +1818,7 @@ function initFirebase(cfg) {
     if (firebase.apps.length) firebase.apps.forEach(a=>a.delete());
     const app = firebase.initializeApp(cfg);
     _db = firebase.database(app);
+    _dbgLog('fb', `Firebase接続: ${cfg.databaseURL||''}`);
     showSync('Firebaseからデータ取得中...');
     let _fbFirstLoad = true;
     _db.ref('registrations').on('value', snap => {
@@ -1661,6 +1832,7 @@ function initFirebase(cfg) {
       // アラート・アップデート通知は初回ロード時のみ
       if (_fbFirstLoad) {
         _fbFirstLoad = false;
+        _dbgLog('fb', `Firebase同期完了: ${_regs.length}件`);
         showAlertBanner();
         showUpdatePopup();
       }
@@ -1673,6 +1845,8 @@ function initFirebase(cfg) {
 }
 
 function deleteReg(id) {
+  const target = _regs.find(r => r.id === id);
+  _dbgLog('del', `削除: ${target ? (target.company||'未設定')+' / '+(target.partno||'-') : 'id:'+id}`);
   const list = _regs.filter(r => r.id !== id);
   saveRegs(list);
   updateSummary();
@@ -1700,6 +1874,7 @@ function confirmRegister() {
   const id = Date.now();
   const createdAt = new Date().toISOString();
   regs.push({id, company, partno, rd:_modalRd, expiry:_modalExpiry, shelf:_modalShelf, done:false, createdAt});
+  _dbgLog('reg', `登録: ${company||'未設定'} / ${partno||'-'} / 在庫落とし日:${_modalRd}`);
   saveRegs(regs);
   closeModal();
   updateSummary();
@@ -1833,6 +2008,7 @@ function renderDetailList() {
       const id=Number(btn.dataset.id), isDone=btn.dataset.done==='1', name=btn.dataset.name||'未設定';
       if(!confirm(isDone?`「${name}」を未処理に戻しますか？`:`「${name}」を在庫落とし済にしますか？`)) return;
       const regs=loadRegs().map(r=>r.id===id?{...r,done:!isDone}:r);
+      _dbgLog('done', `${isDone?'未処理に戻す':'処理済にする'}: ${name}`);
       saveRegs(regs);
       _detailItems=_detailItems.map(r=>r.id===id?{...r,done:!isDone}:r);
       renderDetailList();
@@ -2225,6 +2401,7 @@ function confirmEdit(){
   if(!expiry||!shelf){showToast('⚠️ 賞味期限と基本賞味期限は必須です');return;}
   const rd=removalDate(expiry,shelf);
   const regs=loadRegs().map(r=>r.id===_editingId?{...r,company,partno,expiry,shelf,rd}:r);
+  _dbgLog('edit', `編集: ${company||'未設定'} / ${partno||'-'} → 在庫落とし日:${rd}`);
   saveRegs(regs);
   closeEditModal();
   renderRegList(loadRegs());
@@ -2420,6 +2597,30 @@ function doExportPDF(mode){
   border: none; padding: 0; background: none; border-radius: 4px;
 }
 
+
+/* ── デバッグモーダル ── */
+.debug-tab{
+  padding:11px 14px;font-size:12px;font-weight:700;font-family:inherit;
+  background:none;border:none;border-bottom:2px solid transparent;
+  color:var(--sub);cursor:pointer;transition:color .15s;
+}
+.debug-tab.on{color:var(--accent);border-bottom-color:var(--accent);}
+.debug-log-row{
+  padding:4px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:flex-start;
+}
+.debug-log-row:last-child{border-bottom:none;}
+.debug-log-time{color:var(--sub);font-size:10px;white-space:nowrap;flex-shrink:0;padding-top:1px;}
+.debug-log-tag{
+  font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;
+  white-space:nowrap;flex-shrink:0;
+}
+.debug-log-tag.reg{background:#FEF1EE;color:#C85A2E;}
+.debug-log-tag.edit{background:#EFF6FF;color:#2563EB;}
+.debug-log-tag.del{background:#FEF2F2;color:#DC2626;}
+.debug-log-tag.done{background:#F0FDF4;color:#16A34A;}
+.debug-log-tag.fb{background:#F5F3FF;color:#7C3AED;}
+.debug-log-tag.sys{background:#F6F6FA;color:#6E6E82;}
+.debug-log-msg{color:var(--ink);word-break:break-all;}
 </style></head><body>
 <div class="pbtn"><button class="p" onclick="window.print()">🖨️ PDFとして保存</button><button class="c" onclick="window.close()">✕ 閉じる</button></div>
 <div class="hdr"><div><div class="hdr-title">在庫落とし日一覧</div><div style="font-size:9pt;opacity:.85;margin-top:2px">1/3ルール 賞味期限チェック計算機 ver.2.0</div></div><div class="hdr-meta">出力日：${dateLabel}<br>対象：${filterLabel}　件数：${filtered.length}件</div></div>
