@@ -897,9 +897,28 @@ input[type=date]:focus,input[type=number]:focus{
     <div class="filter-row">
       <button class="filter-btn on" id="list-filter-all"    onclick="setListFilter('all')">すべて</button>
       <button class="filter-btn"    id="list-filter-active" onclick="setListFilter('active')">未処理</button>
-      <button class="filter-btn"    id="list-filter-done"   onclick="setListFilter('done')">✅ 処理済</button>
     </div>
     <div id="reg-list"></div>
+
+    <!-- 処理済み折りたたみエリア -->
+    <div id="done-section" style="margin-top:8px;display:none">
+      <button id="done-toggle-btn" onclick="toggleDoneSection()" style="
+        width:100%;display:flex;align-items:center;justify-content:space-between;
+        padding:14px 16px;background:var(--bg);border:1.5px solid var(--line);
+        border-radius:14px;font-family:inherit;cursor:pointer;font-size:13px;
+        font-weight:700;color:var(--sub);
+      ">
+        <span>✅ 処理済み一覧</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span id="done-count-badge" style="font-size:10px;background:var(--green);color:#fff;padding:2px 8px;border-radius:20px;font-weight:700"></span>
+          <span id="done-arrow" style="font-size:11px;transition:transform .25s">▼</span>
+        </span>
+      </button>
+      <div id="done-list-wrap" style="max-height:0;overflow:hidden;transition:max-height .35s ease,opacity .25s;opacity:0">
+        <div id="done-list" style="padding-top:8px"></div>
+      </div>
+    </div>
+
   </div><!-- /panel-list -->
 
 </div><!-- /scroll -->
@@ -939,7 +958,10 @@ input[type=date]:focus,input[type=number]:focus{
         <div class="suggest-list" id="company-suggest"></div>
       </div>
       <label class="form-lbl">品番</label>
-      <input type="text" class="form-input" id="modal-partno" placeholder="例：AB-1234" maxlength="30">
+      <div class="suggest-wrap">
+        <input type="text" class="form-input" id="modal-partno" placeholder="例：AB-1234" maxlength="30" autocomplete="off">
+        <div class="suggest-list" id="partno-suggest"></div>
+      </div>
     </div>
     <div class="modal-ftr">
       <div class="modal-btns">
@@ -965,7 +987,10 @@ input[type=date]:focus,input[type=number]:focus{
         <div class="suggest-list" id="edit-company-suggest"></div>
       </div>
       <label class="form-lbl">品番</label>
-      <input type="text" class="form-input" id="edit-partno" placeholder="例：AB-1234" maxlength="30">
+      <div class="suggest-wrap">
+        <input type="text" class="form-input" id="edit-partno" placeholder="例：AB-1234" maxlength="30" autocomplete="off">
+        <div class="suggest-list" id="edit-partno-suggest"></div>
+      </div>
       <label class="form-lbl">賞味期限</label>
       <input type="date" class="form-input" id="edit-expiry">
       <label class="form-lbl">基本賞味期限（日数）</label>
@@ -1723,22 +1748,85 @@ function setListFilter(f) {
   });
   renderRegList(loadRegs());
 }
+
+// ── 処理済みセクション ──
+let _doneOpen = false;
+
+function toggleDoneSection() {
+  _doneOpen = !_doneOpen;
+  const wrap  = document.getElementById('done-list-wrap');
+  const arrow = document.getElementById('done-arrow');
+  if (_doneOpen) {
+    wrap.style.maxHeight = wrap.scrollHeight + 'px';
+    wrap.style.opacity   = '1';
+    arrow.style.transform = 'rotate(180deg)';
+  } else {
+    wrap.style.maxHeight = '0';
+    wrap.style.opacity   = '0';
+    arrow.style.transform = 'rotate(0deg)';
+  }
+}
+
+function renderDoneList(done) {
+  const el = document.getElementById('done-list');
+  if (!el) return;
+  if (!done.length) { el.innerHTML = ''; return; }
+  const sorted = [...done].sort((a,b)=>new Date(b.rd)-new Date(a.rd));
+  el.innerHTML = sorted.map(r => {
+    const cls = getStatusCls(r.rd), d = daysLeft(r.rd);
+    const statusLabel = d<0?`${Math.abs(d)}日超過`:d===0?'本日':`残${d}日`;
+    return `<div class="reg-item done" data-reg-id="${r.id}" style="cursor:pointer;opacity:.7">
+      <div class="reg-main" onclick="openDetail('${r.rd}')">
+        <div class="reg-company">${r.company||r.name||'未設定'}<span class="done-badge">✅ 処理済</span></div>
+        <div class="reg-sub">${r.partno?`<span class="reg-partno">${r.partno}</span>`:''}</div>
+        <div class="reg-dates">
+          在庫落とし日：${fmt(r.rd)}<br>
+          賞味期限：${r.expiry}　基本：${r.shelf}日<br>
+          <span style="font-size:10px;color:var(--subtle)">🕐 登録：${fmtDateTime(r.createdAt)}</span>
+        </div>
+      </div>
+      <div class="reg-btns">
+        <button class="reg-icon-btn" onclick="openEditModal(${r.id})" title="編集">✏️</button>
+        <button class="reg-icon-btn" onclick="confirmDelete(${r.id},'${(r.company||r.name||'未設定').replace(/'/g,'')}')" title="削除">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+  // 展開済みなら高さ再計算
+  if (_doneOpen) {
+    const wrap = document.getElementById('done-list-wrap');
+    wrap.style.maxHeight = wrap.scrollHeight + 'px';
+  }
+}
+
 function filterRegList() { renderRegList(loadRegs()); }
 
 function renderRegList(regs) {
   const badge=document.getElementById('reg-count-badge');
-  if(badge) badge.textContent=regs.length?regs.length+'件':'';
   const keyword=(document.getElementById('reg-search')||{value:''}).value.trim().toLowerCase();
-  let filtered=[...regs];
-  if(_listFilter==='active') filtered=filtered.filter(r=>!r.done);
-  if(_listFilter==='done')   filtered=filtered.filter(r=>r.done);
-  if(keyword) filtered=filtered.filter(r=>
+  let all=[...regs];
+  if(keyword) all=all.filter(r=>
     (r.company||r.name||'').toLowerCase().includes(keyword)||
     (r.partno||'').toLowerCase().includes(keyword)
   );
+
+  // 未処理・処理済みを分離
+  const active = all.filter(r=>!r.done);
+  const done   = all.filter(r=>r.done);
+
+  // フィルター状態に応じてメインリストを決定
+  const filtered = _listFilter==='active' ? active : _listFilter==='done' ? done : active;
+  if(badge) badge.textContent=active.length?active.length+'件':'';
+
+  // 処理済みセクション表示
+  const doneSection = document.getElementById('done-section');
+  const doneBadge   = document.getElementById('done-count-badge');
+  if(doneSection) doneSection.style.display = done.length ? 'block' : 'none';
+  if(doneBadge)   doneBadge.textContent = done.length+'件';
+  renderDoneList(done);
+
   const el=document.getElementById('reg-list');
   if(!filtered.length){
-    el.innerHTML=`<div class="empty-hint" style="padding:32px 0"><div class="empty-icon" style="font-size:36px">📭</div><div class="empty-text">${keyword?'該当する登録がありません':'登録済みのアイテムはありません'}</div></div>`;
+    el.innerHTML=`<div class="empty-hint" style="padding:32px 0"><div class="empty-icon" style="font-size:36px">📭</div><div class="empty-text">${keyword?'該当する登録がありません':'未処理の登録はありません'}</div></div>`;
     return;
   }
   const sorted=[...filtered].sort((a,b)=>new Date(a.rd)-new Date(b.rd));
@@ -1952,6 +2040,51 @@ function hideSuggest() {
 document.getElementById('modal-company').addEventListener('input',function(){showSuggest(this.value);});
 document.getElementById('modal-company').addEventListener('focus',function(){showSuggest(this.value);});
 document.getElementById('modal-company').addEventListener('blur',()=>setTimeout(hideSuggest,150));
+
+// ── 品番サジェスト ──
+function getPartnoHistory(companyFilter) {
+  const regs = loadRegs();
+  const filtered = companyFilter
+    ? regs.filter(r => (r.company||r.name||'') === companyFilter)
+    : regs;
+  const all = filtered.map(r=>r.partno).filter(Boolean);
+  return [...new Set(all)];
+}
+
+function showPartnoSuggest(val, suggestId, companyInputId) {
+  const wrap = document.getElementById(suggestId);
+  if (!wrap) return;
+  const company = companyInputId ? document.getElementById(companyInputId).value.trim() : '';
+  const all = getPartnoHistory(company);
+  const q = val.trim().toLowerCase();
+  const matches = q ? all.filter(p=>p.toLowerCase().includes(q)) : all;
+  if (!matches.length) { wrap.style.display='none'; return; }
+  wrap.innerHTML = matches.slice(0,6).map(p=>{
+    let html = p;
+    if(q){const idx=p.toLowerCase().indexOf(q);html=p.slice(0,idx)+`<span class="suggest-match">${p.slice(idx,idx+q.length)}</span>`+p.slice(idx+q.length);}
+    return `<div class="suggest-item" data-val="${p.replace(/"/g,'&quot;')}">${html}</div>`;
+  }).join('');
+  wrap.style.display = 'block';
+  wrap.querySelectorAll('.suggest-item').forEach(el=>{
+    el.addEventListener('mousedown', e=>e.preventDefault());
+    el.addEventListener('click', ()=>{
+      const inputEl = wrap.previousElementSibling;
+      if(inputEl) inputEl.value = el.dataset.val;
+      wrap.style.display = 'none';
+    });
+  });
+}
+
+// 登録モーダル品番
+document.getElementById('modal-partno').addEventListener('input', function(){showPartnoSuggest(this.value,'partno-suggest','modal-company');});
+document.getElementById('modal-partno').addEventListener('focus', function(){showPartnoSuggest(this.value,'partno-suggest','modal-company');});
+document.getElementById('modal-partno').addEventListener('blur',  ()=>setTimeout(()=>{const w=document.getElementById('partno-suggest');if(w)w.style.display='none';},150));
+
+// 編集モーダル品番
+document.getElementById('edit-partno').addEventListener('input', function(){showPartnoSuggest(this.value,'edit-partno-suggest','edit-company');});
+document.getElementById('edit-partno').addEventListener('focus', function(){showPartnoSuggest(this.value,'edit-partno-suggest','edit-company');});
+document.getElementById('edit-partno').addEventListener('blur',  ()=>setTimeout(()=>{const w=document.getElementById('edit-partno-suggest');if(w)w.style.display='none';},150));
+
 
 // ── 編集モーダル ──
 let _editingId=null;
