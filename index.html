@@ -889,7 +889,12 @@ input[type=date]:focus,input[type=number]:focus{
   <div class="alert-banner-hdr">
     <div class="alert-banner-title">⚠️ 在庫落とし日が近い商品があります</div>
     <div style="display:flex;align-items:center;gap:6px">
-      <button class="alert-close-btn" id="alert-snooze-btn" onclick="snoozeAlertBanner()" style="font-size:10px;width:auto;padding:3px 8px;border-radius:8px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap">今日は表示しない</button>
+      <label onclick="snoozeAlertBanner()" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;white-space:nowrap">
+        <span style="width:16px;height:16px;border-radius:4px;border:2px solid #fff;background:#111;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        今日は表示しない
+      </label>
       <button class="alert-close-btn" onclick="document.getElementById('alert-banner').classList.remove('show')">✕</button>
     </div>
   </div>
