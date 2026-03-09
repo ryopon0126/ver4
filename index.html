@@ -888,15 +888,7 @@ input[type=date]:focus,input[type=number]:focus{
 <div class="alert-banner" id="alert-banner">
   <div class="alert-banner-hdr">
     <div class="alert-banner-title">⚠️ 在庫落とし日が近い商品があります</div>
-    <div style="display:flex;align-items:center;gap:6px">
-      <label onclick="snoozeAlertBanner()" style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;font-weight:700;color:#fff;white-space:nowrap">
-        <span style="width:16px;height:16px;border-radius:4px;border:2px solid #fff;background:#111;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </span>
-        今日は表示しない
-      </label>
-      <button class="alert-close-btn" onclick="document.getElementById('alert-banner').classList.remove('show')">✕</button>
-    </div>
+<button class="alert-close-btn" onclick="document.getElementById('alert-banner').classList.remove('show')">✕</button>
   </div>
   <div id="alert-banner-list"></div>
 </div>
@@ -1238,6 +1230,27 @@ input[type=date]:focus,input[type=number]:focus{
 
 
 <!-- ══ アップデート通知ポップアップ ══ -->
+<div class="update-overlay" id="urgent-overlay">
+  <div class="update-box">
+    <div class="update-hdr" style="background:linear-gradient(135deg,#E8341A,#a02010)">
+      <div class="update-hdr-top">
+        <span class="update-badge" style="background:rgba(255,255,255,.25);color:#fff">🚨 URGENT</span>
+      </div>
+      <div class="update-ver">在庫落とし日が1週間以内</div>
+      <div class="update-sub">賞味期限チェック計算機</div>
+    </div>
+    <div class="update-body">
+      <div id="urgent-popup-list" style="display:flex;flex-direction:column;gap:8px;padding:4px 0"></div>
+    </div>
+    <div class="update-ftr">
+      <button class="update-close-btn" onclick="closeUrgentPopup()">確認しました</button>
+      <label class="update-today-check">
+        <input type="checkbox" id="urgent-no-today"> 今日は表示しない
+      </label>
+    </div>
+  </div>
+</div>
+
 <div class="update-overlay" id="update-overlay">
   <div class="update-box">
     <div class="update-hdr">
@@ -2108,6 +2121,45 @@ _dbgLog('sys', 'アプリ起動 ver.2.0');
 
 
 // ── アップデート通知ポップアップ ──
+const URGENT_SNOOZE_KEY = 'urgent_popup_snooze';
+
+function showUrgentPopup() {
+  const today = new Date().toDateString();
+  if (localStorage.getItem(URGENT_SNOOZE_KEY) === today) return;
+  const regs = loadRegs();
+  const urgent = regs.filter(r => !r.done && daysLeft(r.rd) >= 0 && daysLeft(r.rd) <= 7)
+                     .sort((a,b) => new Date(a.rd) - new Date(b.rd));
+  if (!urgent.length) return;
+  const list = document.getElementById('urgent-popup-list');
+  if (!list) return;
+  list.innerHTML = urgent.map(r => {
+    const d = daysLeft(r.rd);
+    const label = d === 0 ? '🔴 本日' : `🔴 残${d}日`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;
+      padding:10px 12px;background:var(--bg);border-radius:10px;gap:10px">
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:800;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${r.company||'未設定'}${r.partno?' · '+r.partno:''}
+        </div>
+        <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--sub);margin-top:2px">
+          在庫落とし日：${fmt(r.rd)}
+        </div>
+      </div>
+      <span class="badge urgent" style="flex-shrink:0">${label}</span>
+    </div>`;
+  }).join('');
+  setTimeout(() => {
+    document.getElementById('urgent-overlay').classList.add('open');
+  }, 800);
+}
+
+function closeUrgentPopup() {
+  document.getElementById('urgent-overlay').classList.remove('open');
+  if (document.getElementById('urgent-no-today').checked) {
+    localStorage.setItem(URGENT_SNOOZE_KEY, new Date().toDateString());
+  }
+}
+
 const UPDATE_VER_KEY = 'update_seen_v2.0';
 function showUpdatePopup() {
   const today = new Date().toDateString();
@@ -2220,6 +2272,7 @@ function initFirebase(cfg) {
           _dbgLog('fb', `Firebase同期完了: ${_regs.length}件`);
           showAlertBanner();
           showUpdatePopup();
+          showUrgentPopup();
           }
       }, err => {
         clearTimeout(syncTimeout);
@@ -2897,15 +2950,7 @@ function showEditSuggest(val){
 function hideEditSuggest(){const el=document.getElementById('edit-company-suggest');if(el)el.style.display='none';}
 
 // ── 通知バナー ──
-function snoozeAlertBanner() {
-  const today = new Date().toDateString();
-  localStorage.setItem('alert_snooze_date', today);
-  document.getElementById('alert-banner').classList.remove('show');
-}
-
 function showAlertBanner(){
-  // 今日スヌーズ済みなら表示しない
-  if (localStorage.getItem('alert_snooze_date') === new Date().toDateString()) return;
   const regs=loadRegs();
   const urgent=regs.filter(r=>!r.done&&daysLeft(r.rd)<=30).sort((a,b)=>new Date(a.rd)-new Date(b.rd));
   if(!urgent.length) return;
@@ -3164,6 +3209,7 @@ document.getElementById('pdf-overlay').addEventListener('click',e=>{
   }
 
   showUpdatePopup();
+  showUrgentPopup();
 })();
 </script>
 </body>
