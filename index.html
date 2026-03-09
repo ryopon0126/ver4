@@ -88,27 +88,7 @@ body{
 }
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.alert-banner{
-  display:none;flex-direction:column;gap:6px;
-  background:var(--acc-bg);border-bottom:2px solid rgba(232,52,26,.12);
-  padding:10px 16px;flex-shrink:0;
-}
-.alert-banner.show{display:flex}
-.alert-banner-hdr{display:flex;align-items:center;justify-content:space-between}
-.alert-banner-title{font-size:12px;font-weight:700;color:var(--accent)}
-.alert-close-btn{
-  width:22px;height:22px;border-radius:6px;cursor:pointer;
-  border:1px solid rgba(232,52,26,.2);background:none;color:var(--accent);font-size:11px;
-}
-.alert-item{
-  background:#fff;border-radius:8px;padding:9px 12px;
-  display:flex;align-items:center;justify-content:space-between;
-  border:1px solid rgba(232,52,26,.1);
-  transition:background .12s;
-}
-.alert-item:active{background:var(--acc-bg)}
-.alert-item-name{font-size:12px;font-weight:700}
-.alert-item-date{font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;margin-top:1px}
+
 
 /* ═══════════════════════ SCROLL ═══════════════════════ */
 .scroll{
@@ -885,14 +865,6 @@ input[type=date]:focus,input[type=number]:focus{
   <div class="sync-spinner"></div>
   <span id="sync-msg">同期中...</span>
 </div>
-<div class="alert-banner" id="alert-banner">
-  <div class="alert-banner-hdr">
-    <div class="alert-banner-title">⚠️ 在庫落とし日が近い商品があります</div>
-<button class="alert-close-btn" onclick="document.getElementById('alert-banner').classList.remove('show')">✕</button>
-  </div>
-  <div id="alert-banner-list"></div>
-</div>
-
 <!-- SCROLL -->
 <div class="scroll">
 
@@ -2270,7 +2242,6 @@ function initFirebase(cfg) {
         if (_fbFirstLoad) {
           _fbFirstLoad = false;
           _dbgLog('fb', `Firebase同期完了: ${_regs.length}件`);
-          showAlertBanner();
           showUpdatePopup();
           showUrgentPopup();
           }
@@ -2950,42 +2921,6 @@ function showEditSuggest(val){
 function hideEditSuggest(){const el=document.getElementById('edit-company-suggest');if(el)el.style.display='none';}
 
 // ── 通知バナー ──
-function showAlertBanner(){
-  const regs=loadRegs();
-  const urgent=regs.filter(r=>!r.done&&daysLeft(r.rd)<=30).sort((a,b)=>new Date(a.rd)-new Date(b.rd));
-  if(!urgent.length) return;
-  const list=document.getElementById('alert-banner-list');
-  list.innerHTML=urgent.map(r=>{
-    const d=daysLeft(r.rd);
-    const isPassed=d<0;
-    const label=isPassed?`${Math.abs(d)}日超過`:d===0?'本日':`残${d}日`;
-    return `<div class="alert-item" data-rd="${r.rd}" style="cursor:pointer">
-      <div>
-        <div class="alert-item-name">${r.company||r.name||'未設定'}${r.partno?' · '+r.partno:''}</div>
-        <div class="alert-item-date">在庫落とし日：${fmt(r.rd)}</div>
-      </div>
-      <span class="badge ${isPassed?'passed':'urgent'}">${label}</span>
-    </div>`;
-  }).join('');
-
-  // アイテムタップ → カレンダータブへ遷移して詳細を開く
-  list.querySelectorAll('.alert-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const rd = el.dataset.rd;
-      document.getElementById('alert-banner').classList.remove('show');
-      // カレンダーを該当月に移動
-      const d = new Date(rd);
-      _calYear  = d.getFullYear();
-      _calMonth = d.getMonth();
-      switchTab('cal');
-      // カレンダー描画後に詳細を開く
-      setTimeout(() => openDetail(rd), 150);
-    });
-  });
-
-  document.getElementById('alert-banner').classList.add('show');
-}
-
 // ── サマリー ──
 function updateSummary(){
   const regs=loadRegs();
@@ -3204,7 +3139,6 @@ document.getElementById('pdf-overlay').addEventListener('click',e=>{
     if (cfg && cfg.apiKey && cfg.databaseURL) {
       initFirebase(cfg);
     } else {
-      setTimeout(showAlertBanner, 500);
     }
   }
 
