@@ -576,6 +576,16 @@ input[type=date]:focus,input[type=number]:focus{
   border:1.5px solid rgba(22,163,74,.3);background:var(--grn-bg);
   color:var(--green);font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;
 }
+.d-shipped-btn{
+  flex:1;padding:12px;border-radius:9px;
+  border:1.5px solid rgba(37,99,235,.3);background:#EFF6FF;
+  color:#2563EB;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;
+}
+.shipped-badge{
+  font-size:10px;font-weight:700;color:#2563EB;
+  background:#EFF6FF;border:1px solid rgba(37,99,235,.2);
+  border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle;
+}
 .d-edit-btn{
   padding:12px 14px;border-radius:9px;
   border:1.5px solid rgba(232,52,26,.25);background:var(--acc-bg);
@@ -2437,13 +2447,14 @@ function renderDetailList() {
     const cls = getStatusCls(r.rd);
     const d   = daysLeft(r.rd);
     const isDone = r.done;
-    const statusLabel = isDone ? '✅ 在庫落とし済' : d<0?`🚨 ${Math.abs(d)}日超過`:d===0?'⚠️ 本日':d<=30?`⚠️ 残${d}日`:`残${d}日`;
-    const chipCls = isDone ? 'ok' : cls;
+    const isShipped = r.shipped;
+    const statusLabel = isShipped ? '🚢 出荷済' : isDone ? '✅ 在庫落とし済' : d<0?`🚨 ${Math.abs(d)}日超過`:d===0?'⚠️ 本日':d<=30?`⚠️ 残${d}日`:`残${d}日`;
+    const chipCls2 = isShipped ? 'ok' : isDone ? 'ok' : cls;
     const rmDays = r.shelf ? Math.floor(Number(r.shelf)/3) : '-';
     return `<div class="d-card">
-      <div class="d-company">${r.company||r.name||'未設定'}${r.done?'<span class="done-badge">✅ 処理済</span>':''}</div>
+      <div class="d-company">${r.company||r.name||'未設定'}${r.done?'<span class="done-badge">✅ 処理済</span>':''} ${r.shipped?'<span class="shipped-badge">🚢 出荷済</span>':''}</div>
       ${r.partno?`<div style="margin-bottom:8px"><span class="reg-partno">${r.partno}</span></div>`:''}
-      <div class="d-chip ${chipCls}">${statusLabel}</div>
+      <div class="d-chip ${chipCls2}">${statusLabel}</div>
       <div class="d-grid">
         <div class="d-cell full">
           <div class="d-cell-lbl">在庫落とし日</div>
@@ -2466,9 +2477,12 @@ function renderDetailList() {
           <div class="d-cell-val">${fmtDateTime(r.createdAt)}</div>
         </div>
       </div>
-      <div class="d-btns">
+      <div class="d-btns" style="flex-wrap:wrap">
         <button class="d-done-btn" data-id="${r.id}" data-done="${r.done?'1':'0'}" data-name="${(r.company||r.name||'').replace(/"/g,'&quot;')}">
           ${r.done?'↩️ 未処理に戻す':'✅ 在庫落とし済'}
+        </button>
+        <button class="d-shipped-btn" data-id="${r.id}" data-shipped="${r.shipped?'1':'0'}" data-name="${(r.company||r.name||'').replace(/"/g,'&quot;')}">
+          ${r.shipped?'↩️ 出荷取消':'🚢 出荷済'}
         </button>
         <button class="d-edit-btn" data-id="${r.id}">✏️</button>
         <button class="d-del-btn"  data-id="${r.id}" data-name="${(r.company||r.name||'').replace(/"/g,'&quot;')}">🗑</button>
@@ -2506,6 +2520,24 @@ function renderDetailList() {
       _detailItems=_detailItems.map(r=>r.id===id?{...r,done:!isDone}:r);
       renderDetailList();
       updateSummary();
+        }
+      });
+    });
+  });
+  document.querySelectorAll('#detail-list .d-shipped-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=Number(btn.dataset.id), isShipped=btn.dataset.shipped==='1', name=btn.dataset.name||'未設定';
+      customConfirm({
+        icon: isShipped ? '↩️' : '🚢',
+        msg: isShipped ? `「${name}」の出荷を取り消しますか？` : `「${name}」を出荷済にしますか？`,
+        okLabel: isShipped ? '出荷取消' : '出荷済にする',
+        onOk: () => {
+          const regs=loadRegs().map(r=>r.id===id?{...r,shipped:!isShipped}:r);
+          _dbgLog('done', `${isShipped?'出荷取消':'出荷済にする'}: ${name}`);
+          saveRegs(regs);
+          _detailItems=_detailItems.map(r=>r.id===id?{...r,shipped:!isShipped}:r);
+          renderDetailList();
+          updateSummary();
         }
       });
     });
@@ -2594,7 +2626,7 @@ function renderDoneList(done) {
     const statusLabel = d<0?`${Math.abs(d)}日超過`:d===0?'本日':`残${d}日`;
     return `<div class="reg-item done" data-reg-id="${r.id}" style="cursor:pointer;opacity:.7">
       <div class="reg-main" onclick="openDetail('${r.rd}')">
-        <div class="reg-company">${r.company||r.name||'未設定'}<span class="done-badge">✅ 処理済</span></div>
+        <div class="reg-company">${r.company||r.name||'未設定'}<span class="done-badge">✅ 処理済</span>${r.shipped?'<span class="shipped-badge">🚢 出荷済</span>':''}</div>
         <div class="reg-sub">${r.partno?`<span class="reg-partno">${r.partno}</span>`:''}</div>
         <div class="reg-dates">
           在庫落とし日：${fmt(r.rd)}<br>
@@ -2662,7 +2694,7 @@ function renderRegList(regs) {
     const statusLabel=d<0?`${Math.abs(d)}日超過`:d===0?'本日':`残${d}日`;
     return `<div class="reg-item${r.done?' done':''}" data-reg-id="${r.id}" style="cursor:pointer">
       <div class="reg-main" onclick="openDetail('${r.rd}')">
-        <div class="reg-company">${r.company||r.name||'未設定'}${r.done?'<span class="done-badge">✅ 処理済</span>':''}</div>
+        <div class="reg-company">${r.company||r.name||'未設定'}${r.done?'<span class="done-badge">✅ 処理済</span>':''} ${r.shipped?'<span class="shipped-badge">🚢 出荷済</span>':''}</div>
         <div class="reg-sub">
           ${r.partno?`<span class="reg-partno">${r.partno}</span>`:''}
         </div>
