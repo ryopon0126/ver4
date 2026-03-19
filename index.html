@@ -173,7 +173,7 @@ body{
   font-size:9px;font-weight:700;color:var(--accent);
   background:var(--acc-bg);padding:2px 6px;border-radius:20px;letter-spacing:.04em;
 }
-input[type=date],input[type=number]{
+input[type=date],input[type=number],.date-input{
   width:100%;background:var(--bg);
   border:1.5px solid var(--line);border-radius:13px;
   padding:14px 16px;font-size:16px;font-weight:600;
@@ -182,10 +182,20 @@ input[type=date],input[type=number]{
   transition:border-color .15s,box-shadow .15s,background .15s;
   color-scheme:light;
 }
-input[type=date]:focus,input[type=number]:focus{
+input[type=date]:focus,input[type=number]:focus,.date-input:focus{
   border-color:var(--accent);
   box-shadow:0 0 0 3px rgba(232,52,26,.1);
   background:#fff;
+}
+.date-input::placeholder{color:var(--subtle);font-size:14px;font-weight:400;}
+.date-input-wrap{position:relative;}
+.date-input-hint{
+  position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  font-size:11px;color:var(--subtle);pointer-events:none;font-weight:600;
+  background:var(--bg);padding:0 2px;
+}
+.date-input:not(:placeholder-shown)+.date-input-hint,.date-input:focus+.date-input-hint{
+  color:var(--accent);
 }
 
 /* プリセット */
@@ -867,7 +877,7 @@ input[type=date]:focus,input[type=number]:focus{
     <div class="tb-mark" id="tb-mark-logo">⅓</div>
     <div class="tb-text">
       <div class="tb-name">賞味期限チェック計算機</div>
-      <div class="tb-ver">ver.2.0</div>
+      <div class="tb-ver">ver.2.1</div>
     </div>
   </div>
   <div class="tb-right">
@@ -925,7 +935,12 @@ input[type=date]:focus,input[type=number]:focus{
         <div class="card-title">📋 入力</div>
         <div class="field">
           <div class="f-label">賞味期限 <span class="req">必須</span></div>
-          <input type="date" id="f-expiry">
+          <div class="date-input-wrap">
+            <input type="text" inputmode="numeric" id="f-expiry"
+              class="date-input" placeholder="20250315"
+              maxlength="10" autocomplete="off">
+            <span class="date-input-hint">YYYYMMDD</span>
+          </div>
         </div>
         <div class="field">
           <div class="f-label">基本賞味期限（日数）<span class="req">必須</span></div>
@@ -1158,7 +1173,12 @@ input[type=date]:focus,input[type=number]:focus{
         <div class="suggest-list" id="edit-partno-suggest"></div>
       </div>
       <label class="form-lbl">賞味期限</label>
-      <input type="date" class="form-input" id="edit-expiry">
+      <div class="date-input-wrap">
+        <input type="text" inputmode="numeric" id="edit-expiry"
+          class="form-input date-input" placeholder="20250315"
+          maxlength="10" autocomplete="off">
+        <span class="date-input-hint">YYYYMMDD</span>
+      </div>
       <label class="form-lbl">基本賞味期限（日数）</label>
       <input type="number" class="form-input" id="edit-shelf" min="1" placeholder="例：180">
     </div>
@@ -1261,11 +1281,18 @@ input[type=date]:focus,input[type=number]:focus{
       <div class="update-hdr-top">
         <span class="update-badge">🆕 UPDATE</span>
       </div>
-      <div class="update-ver">ver.2.0 アップデート</div>
+      <div class="update-ver">ver.2.1 アップデート</div>
       <div class="update-sub">賞味期限チェック計算機</div>
     </div>
     <div class="update-body">
       <ul class="update-list">
+        <li>
+          <div class="update-list-icon orange">⌨️</div>
+          <div>
+            <div class="update-list-text-title">日付入力が数字キーボードに変わりました</div>
+            <div class="update-list-text-desc">20250315 と打つだけで 2025/03/15 に自動変換。ドラムロール操作が不要になりました</div>
+          </div>
+        </li>
         <li>
           <div class="update-list-icon green">👤</div>
           <div>
@@ -1620,7 +1647,7 @@ function getStatusCls(rd) {
 }
 
 function calculate() {
-  const expiry = document.getElementById('f-expiry').value;
+  const expiry = getDateVal('f-expiry');
   const shelf  = parseInt(document.getElementById('f-shelf').value);
   if (!expiry || !shelf) { showToast('⚠️ 賞味期限と基本賞味期限を入力してください'); return; }
 
@@ -1681,7 +1708,7 @@ function recalcShelf(expiry) {
   calculate();
 }
 document.getElementById('reset-btn').addEventListener('click', () => {
-  document.getElementById('f-expiry').value = '';
+  setDateVal('f-expiry', ''); document.getElementById('f-expiry').dataset.date = '';
   document.getElementById('f-shelf').value  = '';
   document.getElementById('result-area').innerHTML = `<div class="empty-hint"><div class="empty-icon">📦</div><div class="empty-text">賞味期限と基本賞味期限を入力して<br>計算ボタンを押してください</div></div>`;
   document.getElementById('reset-btn').style.display = 'none';
@@ -1758,7 +1785,13 @@ function addBulkRow(expiry='', shelf='') {
   const row = document.createElement('div');
   row.className = 'bulk-row'; row.id = 'brow-'+id;
   row.innerHTML = `
-    <input type="date" class="b-exp" value="${expiry}" style="padding:11px 12px;font-size:14px">
+    <div class="date-input-wrap" style="flex:1;min-width:0">
+      <input type="text" inputmode="numeric" class="b-exp date-input"
+        placeholder="20250315" maxlength="10" autocomplete="off"
+        style="padding:11px 12px;font-size:14px;width:100%"
+        data-date="${expiry}">
+      <span class="date-input-hint">YYYYMMDD</span>
+    </div>
     <div class="b-shelf-wrap">
       <input type="number" class="b-shelf form-input" value="${shelf||''}" placeholder="日数 ▾" min="1"
         style="padding:11px 14px;font-size:14px;padding-right:34px;cursor:pointer"
@@ -1792,7 +1825,7 @@ document.getElementById('bulk-calc-btn').addEventListener('click', () => {
   const rows = document.querySelectorAll('.bulk-row');
   const results = [];
   rows.forEach(row => {
-    const exp = row.querySelector('.b-exp').value;
+    const exp = getDateVal(row.querySelector('.b-exp'));
     const shelf = parseInt(row.querySelector('.b-shelf').value);
     if (!exp || !shelf) return;
     const rd = removalDate(exp, shelf);
@@ -1879,6 +1912,101 @@ function getDeviceLabel() {
 }
 
 let _db = null; // Firebase database instance
+
+
+// ── 数字キーボード日付入力 ──
+function parseDateInput(raw) {
+  // 数字のみ抽出
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  return digits;
+}
+
+function formatDateDisplay(digits) {
+  // YYYYMMDD → YYYY/MM/DD
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return digits.slice(0,4) + '/' + digits.slice(4);
+  return digits.slice(0,4) + '/' + digits.slice(4,6) + '/' + digits.slice(6);
+}
+
+function digitsToIso(digits) {
+  // YYYYMMDD → YYYY-MM-DD
+  if (digits.length !== 8) return '';
+  return digits.slice(0,4) + '-' + digits.slice(4,6) + '-' + digits.slice(6);
+}
+
+function isoToDigits(iso) {
+  // YYYY-MM-DD → YYYYMMDD
+  if (!iso) return '';
+  return iso.replace(/-/g, '');
+}
+
+function initDateInput(el) {
+  if (el._dateInited) return;
+  el._dateInited = true;
+  // data-date に初期値がある場合（一括行）、表示を設定
+  if (el.dataset.date) {
+    const digits = isoToDigits(el.dataset.date);
+    el.value = formatDateDisplay(digits);
+  }
+  el.addEventListener('input', function(e) {
+    const sel = this.selectionStart;
+    const raw = this.value;
+    const digits = parseDateInput(raw);
+    const display = formatDateDisplay(digits);
+    this.value = display;
+    this.dataset.date = digitsToIso(digits);
+    // カーソル位置を末尾に（/ 挿入後に崩れないよう）
+    const newLen = display.length;
+    this.setSelectionRange(newLen, newLen);
+  });
+  el.addEventListener('blur', function() {
+    const digits = parseDateInput(this.value);
+    if (digits.length > 0 && digits.length < 8) {
+      this.style.borderColor = '#E8341A';
+      this.title = '8桁で入力してください（例：20250315）';
+    } else {
+      this.style.borderColor = '';
+      this.title = '';
+    }
+  });
+  el.addEventListener('focus', function() {
+    this.style.borderColor = '';
+  });
+}
+
+function getDateVal(elOrId) {
+  const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+  if (!el) return '';
+  // data-date が設定されていればそれを使う
+  if (el.dataset.date !== undefined) return el.dataset.date;
+  // type="date" のフォールバック
+  return el.value;
+}
+
+function setDateVal(elOrId, isoStr) {
+  const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+  if (!el) return;
+  el.dataset.date = isoStr || '';
+  const digits = isoToDigits(isoStr || '');
+  el.value = formatDateDisplay(digits);
+}
+
+// 全 .date-input を初期化
+function initAllDateInputs() {
+  document.querySelectorAll('.date-input').forEach(initDateInput);
+}
+
+// 一括行に動的追加された date-input にも対応（MutationObserver）
+(function() {
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(m => m.addedNodes.forEach(node => {
+      if (node.nodeType !== 1) return;
+      node.querySelectorAll && node.querySelectorAll('.date-input').forEach(initDateInput);
+      if (node.classList && node.classList.contains('date-input')) initDateInput(node);
+    }));
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+})();
 
 // ── カスタム確認ダイアログ ──
 function customConfirm({ icon='⚠️', msg, sub='', okLabel='実行', okDanger=false, onOk }) {
@@ -2191,7 +2319,7 @@ function closeUrgentPopup() {
   }
 }
 
-const UPDATE_VER_KEY = 'update_seen_v2.0';
+const UPDATE_VER_KEY = 'update_seen_v2.1';
 function showUpdatePopup() {
   const today = new Date().toDateString();
   const seen  = localStorage.getItem(UPDATE_VER_KEY);
@@ -2952,7 +3080,7 @@ function openEditModal(id){
   _editingId=id;
   document.getElementById('edit-company').value = r.company||r.name||'';
   document.getElementById('edit-partno').value  = r.partno  ||'';
-  document.getElementById('edit-expiry').value  = r.expiry  ||'';
+  setDateVal('edit-expiry', r.expiry || '');
   document.getElementById('edit-shelf').value   = r.shelf   ||'';
   hideEditSuggest();
   document.getElementById('edit-overlay').classList.add('open');
@@ -2963,7 +3091,7 @@ function confirmEdit(){
   if(!_editingId) return;
   const company = document.getElementById('edit-company').value.trim()||'未設定';
   const partno  = document.getElementById('edit-partno').value.trim();
-  const expiry  = document.getElementById('edit-expiry').value;
+  const expiry  = getDateVal('edit-expiry');
   const shelf   = parseInt(document.getElementById('edit-shelf').value);
   if(!expiry||!shelf){showToast('⚠️ 賞味期限と基本賞味期限は必須です');return;}
   const rd=removalDate(expiry,shelf);
@@ -3289,6 +3417,7 @@ document.getElementById('pdf-overlay').addEventListener('click',e=>{
 
   showUpdatePopup();
   showUrgentPopup();
+  initAllDateInputs();
 })();
 </script>
 </body>
